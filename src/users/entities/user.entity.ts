@@ -17,10 +17,10 @@ export class User {
     password: string;
 
     @CreateDateColumn({name: 'create_at'})
-    created_at: Date;
+    createdAt: Date;
     
     @UpdateDateColumn({ name: 'updated_at', type: 'timestamp with time zone' })
-    updated_at: Date;
+    updatedAt: Date;
 
     @BeforeInsert()
     async hashPassword() {
