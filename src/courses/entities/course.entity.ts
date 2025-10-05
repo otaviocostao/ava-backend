@@ -1,5 +1,6 @@
 import { CourseStatus } from "src/common/enums/course-status.enum";
 import { Department } from "src/departments/entities/department.entity";
+import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity("courses")
@@ -21,4 +22,7 @@ export class Course {
         type: 'enum', enum: CourseStatus, default: CourseStatus.ACTIVE
     })
     status: CourseStatus;
+
+    @OneToMany(() => Discipline, (discipline) => discipline.course)
+    disciplines: Discipline[];
 }
