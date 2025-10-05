@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { ResponseUserDto } from './dto/response-user.dto';
 
 
 @Injectable()
@@ -15,7 +16,7 @@ export class UsersService {
     private readonly userRepository: Repository<User>
   ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
+  async create(createUserDto: CreateUserDto): Promise<ResponseUserDto> {
     const existingUser = await this.userRepository.findOneBy({
       email: createUserDto.email,
     });
@@ -26,15 +27,14 @@ export class UsersService {
     const user = this.userRepository.create(createUserDto);
     const savedUser = await this.userRepository.save(user);
 
-    const { password, ...result } = savedUser;
-    return result;
+    return new ResponseUserDto(savedUser);
   }
 
   findAll(): Promise<User[]> {
     return this.userRepository.find();
   }
 
-  async findOne(id: string): Promise<User> {
+  async findOne(id: string): Promise<ResponseUserDto> {
     const user = await this.userRepository.findOneBy({ id });
     if (!user) {
       throw new NotFoundException(`Usuário com o ID '${id}' não encontrado.`);
@@ -42,7 +42,7 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<ResponseUserDto> {
     const user = await this.userRepository.preload({
       id,
       ...updateUserDto,
@@ -58,8 +58,7 @@ export class UsersService {
 
     const savedUser = await this.userRepository.save(user);
 
-    const { password, ...result } = savedUser;
-    return result;
+    return new ResponseUserDto(savedUser);
   }
 
   async remove(id: string): Promise<void> {
