@@ -6,9 +6,10 @@ import { RolesModule } from './roles/roles.module';
 import { CoursesModule } from './courses/courses.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { DisciplinesModule } from './disciplines/disciplines.module';
+import { ClassesModule } from './classes/classes.module';
 
 @Module({
-  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule],
+  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule],
   controllers: [AppController],
   providers: [AppService],
 })
