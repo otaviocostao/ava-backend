@@ -1,5 +1,6 @@
+import { Class } from "src/classes/entities/class.entity";
 import { Course } from "src/courses/entities/course.entity";
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity("disciplines")
 export class Discipline {
@@ -18,4 +19,7 @@ export class Discipline {
 
     @Column({ type: 'int', nullable: true })
     credits: number;
+
+    @OneToMany(() => Class, (classInstance) => classInstance.discipline)
+    classes: Class[];
 }
