@@ -1,6 +1,6 @@
 import { Class } from 'src/classes/entities/class.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, JoinColumn, ManyToOne } from 'typeorm';
-import { User } from '../../users/entities/user.entity'; // Assuming User entity path
+import { User } from '../../users/entities/user.entity'; 
 
 @Entity('video_lessons')
 export class VideoLesson {
