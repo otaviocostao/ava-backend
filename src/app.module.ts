@@ -10,9 +10,12 @@ import { ClassesModule } from './classes/classes.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { GradesModule } from './grades/grades.module';
 import { NewsModule } from './news/news.module';
+import { VideoLessonsModule } from './video-lessons/video-lessons.module';
+import { AttendancesModule } from './attendances/attendances.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
-  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, GradesModule, NewsModule],
+  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule],
   controllers: [AppController],
   providers: [AppService],
 })
