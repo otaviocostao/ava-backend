@@ -1,6 +1,7 @@
+import { Attendance } from "src/attendances/entities/attendance.entity";
 import { Class } from "src/classes/entities/class.entity";
 import { User } from "src/users/entities/user.entity";
-import { CreateDateColumn, Entity, JoinColumn, ManyToMany, ManyToOne, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
+import { CreateDateColumn, Entity, JoinColumn, ManyToMany, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
 
 @Unique(['student', 'class'])
 @Entity('enrollments')
@@ -20,4 +21,7 @@ export class Enrollment {
 
   @CreateDateColumn({ name: 'enrolled_at', type: 'timestamp with time zone' })
   enrolledAt: Date;
+
+  @OneToMany(() => Attendance, (attendance) => attendance.enrollment)
+  attendances: Attendance[];
 }
