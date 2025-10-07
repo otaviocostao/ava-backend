@@ -8,9 +8,10 @@ import { DepartmentsModule } from './departments/departments.module';
 import { DisciplinesModule } from './disciplines/disciplines.module';
 import { ClassesModule } from './classes/classes.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
+import { VideoLessonsModule } from './video-lessons/video-lessons.module';
 
 @Module({
-  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule],
+  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule],
   controllers: [AppController],
   providers: [AppService],
 })
