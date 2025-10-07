@@ -1,16 +1,18 @@
 import { Enrollment } from "src/enrollments/entities/enrollment.entity";
-import { Column, Entity, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('attendances')
 export class Attendance {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @OneToOne(() => Enrollment)
+    @ManyToOne(() => Enrollment, { nullable: false, onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'enrollment_id' })
     enrollment: Enrollment;
 
+    @Column({ type: 'date', nullable: false })
     date: string;
 
-    @Column({default: false})
+    @Column({ type: 'boolean', default: false })
     present: boolean;
 }
