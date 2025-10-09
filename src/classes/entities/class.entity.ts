@@ -1,5 +1,6 @@
 import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { Enrollment } from "src/enrollments/entities/enrollment.entity";
+import { Material } from "src/materials/entities/material.entity";
 import { User } from "src/users/entities/user.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
@@ -31,4 +32,7 @@ export class Class {
 
   @OneToMany(() => Enrollment, (enrollment) => enrollment.class)
   enrollments: Enrollment[];
+
+  @OneToMany(() => Material, (material) => material.class)
+  materials: Material[];
 }
