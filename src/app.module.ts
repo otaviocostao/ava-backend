@@ -14,9 +14,10 @@ import { VideoLessonsModule } from './video-lessons/video-lessons.module';
 import { AttendancesModule } from './attendances/attendances.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ActivitiesModule } from './activities/activities.module';
+import { MaterialsModule } from './materials/materials.module';
 
 @Module({
-  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule],
+  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule],
   controllers: [AppController],
   providers: [AppService],
 })
