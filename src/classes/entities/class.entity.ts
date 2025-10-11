@@ -1,6 +1,7 @@
 import { Activity } from "src/activities/entities/activity.entity";
 import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { Enrollment } from "src/enrollments/entities/enrollment.entity";
+import { LessonPlan } from "src/lesson-plans/entities/lesson-plan.entity";
 import { Material } from "src/materials/entities/material.entity";
 import { User } from "src/users/entities/user.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
@@ -22,6 +23,7 @@ export class Class {
   @Column({ type: 'int', nullable: false })
   year: number;
 
+  // Relacionamentos com outras entidades
   
   @ManyToOne(() => Discipline, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'discipline_id' })
@@ -39,4 +41,7 @@ export class Class {
 
   @OneToMany(() => Activity, (activity) => activity.class)
   activities: Activity[];
+
+  @OneToMany(() => LessonPlan, (lessonPlan) => lessonPlan.class)
+  lessonPlans: LessonPlan[];
 }
