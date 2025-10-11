@@ -1,14 +1,16 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { ActivityType } from '../../common/enums/activity-type.enum';
 import { ColumnNumericTransformer } from '../../common/transformers/column-numeric.transformer';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Entity('activities')
 export class Activity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
-  class_id: string;
+  @ManyToOne(() => Class, { onDelete: 'CASCADE' })
+  @JoinColumn({name: 'class_id'})
+  class: Class;
 
   @Column({ length: 255 })
   title: string;

@@ -1,3 +1,4 @@
+import { Activity } from "src/activities/entities/activity.entity";
 import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { Enrollment } from "src/enrollments/entities/enrollment.entity";
 import { Material } from "src/materials/entities/material.entity";
@@ -35,4 +36,7 @@ export class Class {
 
   @OneToMany(() => Material, (material) => material.class)
   materials: Material[];
+
+  @OneToMany(() => Activity, (activity) => activity.class)
+  activities: Activity[];
 }
