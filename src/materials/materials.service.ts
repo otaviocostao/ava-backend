@@ -57,10 +57,10 @@ export class MaterialsService {
       return material;
     }
 
-  async update(id: string, updateDepartmentDto: UpdateMaterialDto): Promise<Material> {
+  async update(id: string, updateMaterialDto: UpdateMaterialDto): Promise<Material> {
       const material = await this.materialRepository.preload({ 
         id,
-        ...UpdateMaterialDto,
+        ...updateMaterialDto,
       });
   
       if(!material){
