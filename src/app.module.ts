@@ -15,9 +15,10 @@ import { AttendancesModule } from './attendances/attendances.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { MaterialsModule } from './materials/materials.module';
+import { LessonPlansModule } from './lesson-plans/lesson-plans.module';
 
 @Module({
-  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule],
+  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule],
   controllers: [AppController],
   providers: [AppService],
 })
