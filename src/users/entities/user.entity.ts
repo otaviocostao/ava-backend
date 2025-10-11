@@ -1,5 +1,6 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinTable, ManyToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import * as bcrypt from 'bcrypt';
+import { Role } from "src/roles/entities/role.entity";
 
 @Entity("users")
 export class User {
@@ -28,4 +29,12 @@ export class User {
         this.password = await bcrypt.hash(this.password, 10);
         }
     }
+
+    @ManyToMany(() => Role, { eager: true })
+    @JoinTable({
+        name: 'user_roles',
+        joinColumn: { name: 'user_id', referencedColumnName: 'id' },
+        inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+    })
+    roles: Role[];
 }
