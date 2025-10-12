@@ -3,6 +3,7 @@ import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { Enrollment } from "src/enrollments/entities/enrollment.entity";
 import { LessonPlan } from "src/lesson-plans/entities/lesson-plan.entity";
 import { Material } from "src/materials/entities/material.entity";
+import { Schedule } from "src/schedules/entities/schedule.entity";
 import { User } from "src/users/entities/user.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
@@ -44,4 +45,7 @@ export class Class {
 
   @OneToMany(() => LessonPlan, (lessonPlan) => lessonPlan.class)
   lessonPlans: LessonPlan[];
+
+  @OneToMany(() => Schedule, (schedule) => schedule.class)
+  schedules: Schedule[];
 }
