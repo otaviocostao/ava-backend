@@ -1,6 +1,7 @@
 import { Activity } from "src/activities/entities/activity.entity";
 import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { Enrollment } from "src/enrollments/entities/enrollment.entity";
+import { Forum } from "src/forums/entities/forum.entity";
 import { LessonPlan } from "src/lesson-plans/entities/lesson-plan.entity";
 import { Material } from "src/materials/entities/material.entity";
 import { Schedule } from "src/schedules/entities/schedule.entity";
@@ -48,4 +49,7 @@ export class Class {
 
   @OneToMany(() => Schedule, (schedule) => schedule.class)
   schedules: Schedule[];
+
+  @OneToMany(() => Forum, (forum) => forum.class)
+  forums: Forum[];
 }
