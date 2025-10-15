@@ -1,6 +1,7 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinTable, ManyToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinTable, ManyToMany, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import * as bcrypt from 'bcrypt';
 import { Role } from "src/roles/entities/role.entity";
+import { ForumPost } from "src/forum-posts/entities/forum-post.entity";
 
 @Entity("users")
 export class User {
@@ -37,4 +38,7 @@ export class User {
         inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
     })
     roles: Role[];
+    
+    @OneToMany(() => ForumPost, (post) => post.user)
+    forumPosts: ForumPost[];
 }

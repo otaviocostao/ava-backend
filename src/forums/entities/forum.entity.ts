@@ -1,5 +1,6 @@
 import { Class } from "src/classes/entities/class.entity";
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { ForumPost } from "src/forum-posts/entities/forum-post.entity";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('forums')
 export class Forum {
@@ -15,4 +16,7 @@ export class Forum {
 
     @Column({ type: 'text', nullable: true })
     description: string;
+
+    @OneToMany(() => ForumPost, (post) => post.forum)
+    posts: ForumPost[];
 }
