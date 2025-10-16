@@ -2,6 +2,7 @@ import { BeforeInsert, Column, CreateDateColumn, Entity, JoinTable, ManyToMany, 
 import * as bcrypt from 'bcrypt';
 import { Role } from "src/roles/entities/role.entity";
 import { ForumPost } from "src/forum-posts/entities/forum-post.entity";
+import { Message } from "src/messages/entities/message.entity";
 
 @Entity("users")
 export class User {
@@ -41,4 +42,10 @@ export class User {
     
     @OneToMany(() => ForumPost, (post) => post.user)
     forumPosts: ForumPost[];
+
+    @OneToMany(() => Message, (message) => message.sender)
+    sentMessages: Message[];
+
+    @OneToMany(() => Message, (message) => message.receiver)
+    receivedMessages: Message[];
 }
