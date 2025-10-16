@@ -20,9 +20,10 @@ import { AvailabilitiesModule } from './availabilities/availabilities.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { ForumsModule } from './forums/forums.module';
 import { ForumPostsModule } from './forum-posts/forum-posts.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
-  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule],
+  imports: [UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule],
   controllers: [AppController],
   providers: [AppService],
 })
