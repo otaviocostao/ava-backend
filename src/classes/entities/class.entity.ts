@@ -4,6 +4,7 @@ import { Enrollment } from "src/enrollments/entities/enrollment.entity";
 import { Forum } from "src/forums/entities/forum.entity";
 import { LessonPlan } from "src/lesson-plans/entities/lesson-plan.entity";
 import { Material } from "src/materials/entities/material.entity";
+import { Message } from "src/messages/entities/message.entity";
 import { Schedule } from "src/schedules/entities/schedule.entity";
 import { User } from "src/users/entities/user.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
@@ -52,4 +53,7 @@ export class Class {
 
   @OneToMany(() => Forum, (forum) => forum.class)
   forums: Forum[];
+
+  @OneToMany(() => Message, (message) => message.class)
+  messages: Message[];
 }
