@@ -107,7 +107,7 @@ export class NewsService {
         ? updateNewsDto.targetId ?? null
         : news.targetId ?? null;
 
-      this.ensureTargetCombination(nextTargetType, nextTargetId);
+      this.ensureTargetCombination(nextTargetType ?? undefined, nextTargetId ?? undefined);
 
       news.targetType = nextTargetType;
       news.targetId = nextTargetId;
