@@ -1,98 +1,97 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Sistema de Gestão Acadêmica (AVA e SGE Backend)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![TypeORM](https://img.shields.io/badge/TypeORM-E0234E?style=for-the-badge)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Backend de um sistema de ensino e gestão para faculdades (Ambiente Virtual de Aprendizagem - AVA), desenvolvido com NestJS, TypeORM e PostgreSQL.
 
-## Description
+## 🚧 Status do Projeto
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+**Em Desenvolvimento.** Este é um projeto em andamento. Novas funcionalidades estão sendo adicionadas e a estrutura pode mudar.
 
-## Project setup
+---
 
-```bash
-$ npm install
-```
+## Tecnologias Utilizadas
 
-## Compile and run the project
+*   **Backend:** [NestJS](https://nestjs.com/)
+*   **Banco de Dados:** [PostgreSQL](https://www.postgresql.org/)
+*   **ORM:** [TypeORM](https://typeorm.io/)
+*   **Containerização:** [Docker](https://www.docker.com/) e [Docker Compose](https://docs.docker.com/compose/)
+*   **Validação:** `class-validator` e `class-transformer`
+*   **Autenticação:** JWT (JSON Web Tokens) - *a ser implementado*
 
-```bash
-# development
-$ npm run start
+---
 
-# watch mode
-$ npm run start:dev
+## 🚀 Como Executar o Projeto
 
-# production mode
-$ npm run start:prod
-```
+### Pré-requisitos
 
-## Run tests
+Antes de começar, você vai precisar ter instalado em sua máquina:
+*   [Node.js](https://nodejs.org/en/) (v18 ou superior)
+*   [Docker](https://www.docker.com/products/docker-desktop)
+*   Um gerenciador de pacotes como [NPM](https://www.npmjs.com/) ou [Yarn](https://yarnpkg.com/)
+
+### 1. Clonar o Repositório
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+git clone https://github.com/otaviocostao/ava-backend.git
+cd ava-backend
 ```
 
-## Deployment
+### 2. Configurar Variáveis de Ambiente
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Crie um arquivo `.env` na raiz do projeto com base no modelo abaixo
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=
+DB_PASSWORD=
+DB_DATABASE=ava_db
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_DB=ava_db
+POSTGRES_PORT=5432
+```
+e preencha os campos de `DB_USERNAME`, `DB_PASSWORD`, `POSTGRES_USER` e `POSTGRES_PASSWORD`.
+
+### 3. Iniciar o Banco de Dados
+
+Com o Docker em execução, inicie o contêiner do PostgreSQL com o Docker Compose.
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker-compose up -d
+```
+O banco de dados estará disponível em `localhost:5432`.
+
+### 4. Instalar as Dependências do Projeto
+
+```bash
+npm install
+```
+ou
+```bash
+yarn install
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 5. Rodar a Aplicação
 
-## Resources
+Para iniciar o servidor em modo de desenvolvimento (com hot-reload):
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+npm run start:dev
+```
+A aplicação estará disponível em `http://localhost:3000`.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+---
 
-## Support
+## 📜 Scripts Disponíveis
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+*   `npm run start`: Inicia a aplicação em modo de produção.
+*   `npm run start:dev`: Inicia a aplicação em modo de desenvolvimento.
+*   `npm run build`: Compila o código TypeScript para JavaScript.
+*   `npm run test`: Roda os testes unitários.
 
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+---
