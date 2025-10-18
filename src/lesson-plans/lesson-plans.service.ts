@@ -4,6 +4,7 @@ import { UpdateLessonPlanDto } from './dto/update-lesson-plan.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessonPlan } from './entities/lesson-plan.entity';
 import { Repository } from 'typeorm';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Injectable()
 export class LessonPlansService {
@@ -11,7 +12,8 @@ export class LessonPlansService {
   constructor(
       @InjectRepository(LessonPlan)
       private readonly lessonPlanRepository: Repository<LessonPlan>,
-      private readonly classRepository: Repository<LessonPlan>,
+      @InjectRepository(Class)
+      private readonly classRepository: Repository<Class>,
   ) {}
 
   async create(createLessonPlanDto: CreateLessonPlanDto) : Promise<LessonPlan> {
