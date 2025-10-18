@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import { VideoLessonsService } from './video-lessons.service';
 import { CreateVideoLessonDto } from './dto/create-video-lesson.dto';
 import { UpdateVideoLessonDto } from './dto/update-video-lesson.dto';
@@ -8,27 +8,45 @@ export class VideoLessonsController {
   constructor(private readonly videoLessonsService: VideoLessonsService) {}
 
   @Post()
-  create(@Body() createVideoLessonDto: CreateVideoLessonDto) {
-    return this.videoLessonsService.create(createVideoLessonDto);
+  @HttpCode(HttpStatus.CREATED)
+  create(@Body() createVideoLessonDto: CreateVideoLessonDto, @Req() req: any) {
+    const uploaderId = req.user.id;
+    return this.videoLessonsService.create(createVideoLessonDto, uploaderId);
   }
 
-  @Get()
-  findAll() {
-    return this.videoLessonsService.findAll();
+  @Get('class/:classId')
+  findAllByClass(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Req() req: any,
+  ) {
+    const requestingUserId = req.user.id;
+    return this.videoLessonsService.findAllByClass(classId, requestingUserId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.videoLessonsService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    const requestingUserId = req.user.id;
+    return this.videoLessonsService.findOne(id, requestingUserId);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateVideoLessonDto: UpdateVideoLessonDto) {
-    return this.videoLessonsService.update(id, updateVideoLessonDto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateVideoLessonDto: UpdateVideoLessonDto,
+    @Req() req: any,
+  ) {
+    const requestingUserId = req.user.id;
+    return this.videoLessonsService.update(
+      id,
+      updateVideoLessonDto,
+      requestingUserId,
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.videoLessonsService.remove(id);
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    const requestingUserId = req.user.id;
+    return this.videoLessonsService.remove(id, requestingUserId);
   }
 }
