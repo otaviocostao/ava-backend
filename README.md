@@ -87,6 +87,15 @@ A aplicação estará disponível em `http://localhost:3000`.
 
 ---
 
+### 6. Endpoints do projeto
+
+Para explorar os endpoints disponiveis:
+
+Inicie a aplicacao com `npm run start:dev` (ou comando equivalente).
+Acesse `http://localhost:3000/api` no navegador para abrir a documentacao interativa (Swagger UI).
+Utilize o botao **Try it out** para testar as requisicoes diretamente pela interface.
+
+
 ## 📜 Scripts Disponíveis
 
 *   `npm run start`: Inicia a aplicação em modo de produção.
