@@ -11,11 +11,11 @@ export class Discipline {
     name: string;
 
     @ManyToOne(() => Course, (course) => course.disciplines, {
-        nullable: false,
-        onDelete: 'CASCADE',
+        nullable: true,
+        onDelete: 'SET NULL',
     })
     @JoinColumn({ name: 'course_id' })
-    course: Course;
+    course: Course | null;
 
     @Column({ type: 'int', nullable: true })
     credits: number;

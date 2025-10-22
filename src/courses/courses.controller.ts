@@ -27,6 +27,23 @@ export class CoursesController {
     return this.coursesService.update(id, updateCourseDto);
   }
 
+  @Post(':courseId/disciplines')
+  associateDiscipline(
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Body('disciplineId', ParseUUIDPipe) disciplineId: string,
+  ) {
+    return this.coursesService.associateDiscipline(courseId, disciplineId);
+  }
+
+  @Delete(':courseId/disciplines/:disciplineId')
+  @HttpCode(HttpStatus.OK)
+  dissociateDiscipline(
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
+  ) {
+    return this.coursesService.dissociateDiscipline(courseId, disciplineId);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string) {

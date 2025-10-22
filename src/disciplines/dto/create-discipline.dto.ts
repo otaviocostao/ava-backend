@@ -1,13 +1,14 @@
-import { IsNotEmpty, IsNumber, IsString, IsUUID } from "class-validator";
+import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateDisciplineDto {
-    @IsString()
-    @IsNotEmpty({ message: 'O nome da Disciplina não pode ser vazio.' })
-    name: string;
+  @IsString()
+  @IsNotEmpty({ message: 'O nome da disciplina não pode ser vazio.' })
+  name: string;
 
-    @IsUUID('4', { message: 'O ID da Disciplina deve ser um UUID válido.' })
-    courseId?: string;
+  @IsOptional()
+  @IsUUID('4', { message: 'O ID do curso deve ser um UUID válido.' })
+  courseId?: string | null;
 
-    @IsNumber()
-    credits: number;
+  @IsNumber()
+  credits: number;
 }
