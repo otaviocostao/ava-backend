@@ -46,4 +46,23 @@ export class UsersController {
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.remove(id);
   }
+
+  @Post(':userId/roles')
+  associateRole(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body('roleId', ParseUUIDPipe) roleId: string,
+  ) {
+    console.log('Associating role:', { userId, roleId });
+    return this.usersService.assignRoleToUser(userId, roleId);
+  }
+
+  @Delete(':userId/roles/:roleId')
+  @HttpCode(HttpStatus.OK)
+  removeRole(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('roleId', ParseUUIDPipe) roleId: string,
+  ) {
+    return this.usersService.removeRoleFromUser(userId, roleId);
+  }
+
 }
