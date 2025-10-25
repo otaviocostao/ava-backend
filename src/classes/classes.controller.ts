@@ -12,11 +12,13 @@ export class ClassesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Cria uma nova turma vinculando disciplina e, se informado, o docente responsável.' })
   create(@Body() createClassDto: CreateClassDto) {
     return this.classesService.create(createClassDto);
   }
 
   @Get()
+  @ApiOperation({ summary: 'Lista todas as turmas cadastradas.' })
   findAll() {
     return this.classesService.findAll();
   }
@@ -29,11 +31,13 @@ export class ClassesController {
 
  
   @Get(':id')
+  @ApiOperation({ summary: 'Busca os detalhes completos de uma turma pelo ID.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.classesService.findOne(id);
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Atualiza os dados de uma turma, inclusive disciplina e professor.' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateClassDto: UpdateClassDto,
@@ -58,6 +62,7 @@ export class ClassesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove uma turma do sistema.' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.classesService.remove(id);
   }
