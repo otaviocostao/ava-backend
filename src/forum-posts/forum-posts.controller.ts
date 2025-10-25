@@ -23,6 +23,7 @@ export class ForumPostsController {
     return this.forumPostsService.findOne(id);
   }
 
+  @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateForumPostDto: UpdateForumPostDto,
