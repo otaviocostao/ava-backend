@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Activity } from '../activities/entities/activity.entity';
 import { Enrollment } from '../enrollments/entities/enrollment.entity';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
@@ -11,6 +12,33 @@ interface FindGradesQuery {
   activityId?: string;
 }
 
+export interface ActivityGradebookEntry {
+  enrollmentId: string;
+  student: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  grade: {
+    id: string;
+    score: number;
+    gradedAt: Date | null;
+  } | null;
+}
+
+export interface ActivityGradebook {
+  activity: {
+    id: string;
+    title: string;
+    description: string;
+    type: string;
+    due_date: Date | null;
+    max_score: number | null;
+    classId: string;
+  };
+  entries: ActivityGradebookEntry[];
+}
+
 @Injectable()
 export class GradesService {
   constructor(
@@ -18,6 +46,8 @@ export class GradesService {
     private readonly gradesRepository: Repository<Grade>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(Activity)
+    private readonly activityRepository: Repository<Activity>,
   ) {}
 
   async create(createGradeDto: CreateGradeDto): Promise<Grade> {
@@ -46,6 +76,76 @@ export class GradesService {
     });
 
     return this.gradesRepository.save(grade);
+  }
+
+  async getActivityGradebook(activityId: string): Promise<ActivityGradebook> {
+    const activity = await this.activityRepository.findOne({
+      where: { id: activityId },
+      relations: ['class'],
+    });
+
+    if (!activity) {
+      throw new NotFoundException(
+        `Atividade com o ID '${activityId}' nao encontrada.`,
+      );
+    }
+
+    if (!activity.class) {
+      throw new NotFoundException(
+        `A atividade informada nao esta vinculada a uma turma.`,
+      );
+    }
+
+    const [enrollments, grades] = await Promise.all([
+      this.enrollmentRepository.find({
+        where: { class: { id: activity.class.id } },
+        relations: ['student'],
+      }),
+      this.gradesRepository.find({
+        where: { activityId },
+        relations: ['enrollment', 'enrollment.student'],
+      }),
+    ]);
+
+    const gradesByEnrollmentId = new Map(
+      grades.map((grade) => [grade.enrollment.id, grade]),
+    );
+
+    const entries: ActivityGradebookEntry[] = enrollments.map((enrollment) => {
+      const grade = gradesByEnrollmentId.get(enrollment.id);
+      const student = enrollment.student;
+
+      return {
+        enrollmentId: enrollment.id,
+        student: student
+          ? {
+              id: student.id,
+              name: student.name,
+              email: student.email,
+            }
+          : null,
+        grade: grade
+          ? {
+              id: grade.id,
+              score: grade.score,
+              gradedAt: grade.gradedAt ?? null,
+            }
+          : null,
+      };
+    });
+
+    return {
+      activity: {
+        id: activity.id,
+        title: activity.title,
+        description: activity.description,
+        type: activity.type,
+        due_date: activity.due_date,
+        max_score: activity.max_score,
+        classId: activity.class.id,
+      },
+      entries,
+    };
   }
 
   findAll(query: FindGradesQuery): Promise<Grade[]> {
