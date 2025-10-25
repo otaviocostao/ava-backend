@@ -12,7 +12,7 @@ export class Discipline {
 
     @ManyToOne(() => Course, (course) => course.disciplines, {
         nullable: true,
-        onDelete: 'SET NULL',
+        onDelete: 'CASCADE',
     })
     @JoinColumn({ name: 'course_id' })
     course: Course | null;
