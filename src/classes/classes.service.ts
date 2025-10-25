@@ -20,17 +20,26 @@ export class ClassesService {
   ) {}
 
   // Criar nova Classe
-   async create(createClassDto: CreateClassDto): Promise<Class> {
+  async create(createClassDto: CreateClassDto): Promise<Class> {
     const { disciplineId, teacherId, ...classData } = createClassDto;
 
     const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
     if (!discipline) {
-      throw new NotFoundException(`Disciplina com ID "${disciplineId}" não encontrada.`);
+      throw new NotFoundException(`Disciplina com ID "${disciplineId}" nǜo encontrada.`);
+    }
+
+    let teacher: User | null = null;
+    if (teacherId) {
+      teacher = await this.userRepository.findOneBy({ id: teacherId });
+      if (!teacher) {
+        throw new NotFoundException(`Usuário com ID "${teacherId}" nǜo encontrado.`);
+      }
     }
 
     const newClass = this.classRepository.create({
       ...classData,
-      discipline, 
+      discipline,
+      ...(teacher && { teacher }),
     });
 
     return this.classRepository.save(newClass);
@@ -43,34 +52,86 @@ export class ClassesService {
 
   // Buscar Classe por id
   async findOne(id: string): Promise<Class> {
-    const classEntity = await this.classRepository.findOneBy({ id });
+    const classEntity = await this.classRepository.findOne({
+      where: { id },
+      relations: ['teacher', 'discipline'],
+    });
 
-    if(!classEntity){
-      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`)
+    if (!classEntity){
+      throw new NotFoundException(`Classe com o ID '${id}' nǜo encontrada.`)
     }
     return classEntity;
   }
 
-  //Atualizar Classe
+//Atualizar Classe
   async update(id: string, updateClassDto: UpdateClassDto): Promise<Class> {
-    const classEntity = await this.classRepository.preload({ 
+    const { disciplineId, teacherId, ...classData } = updateClassDto;
+
+    const classEntity = await this.classRepository.preload({
       id,
-      ...updateClassDto,
+      ...classData,
     });
 
-    if(!classEntity){
-      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`)
+    if (!classEntity){
+      throw new NotFoundException(`Classe com o ID '${id}' nǜo encontrada.`)
+    }
+
+    if (disciplineId) {
+      const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
+      if (!discipline) {
+        throw new NotFoundException(`Disciplina com ID "${disciplineId}" nǜo encontrada.`);
+      }
+      classEntity.discipline = discipline;
+    }
+
+    if (teacherId) {
+      const teacher = await this.userRepository.findOneBy({ id: teacherId });
+      if (!teacher) {
+        throw new NotFoundException(`Usuário com ID "${teacherId}" nǜo encontrado.`);
+      }
+      classEntity.teacher = teacher;
     }
 
     return await this.classRepository.save(classEntity);
   }
 
+  async assignTeacher(classId: string, teacherId: string): Promise<Class> {
+    const classEntity = await this.classRepository.findOne({
+      where: { id: classId },
+      relations: ['teacher', 'discipline'],
+    });
+
+    if (!classEntity) {
+      throw new NotFoundException(`Classe com o ID '${classId}' nǜo encontrada.`);
+    }
+
+    const teacher = await this.userRepository.findOneBy({ id: teacherId });
+    if (!teacher) {
+      throw new NotFoundException(`Usuário com ID "${teacherId}" nǜo encontrado.`);
+    }
+
+    classEntity.teacher = teacher;
+    await this.classRepository.save(classEntity);
+
+    return this.classRepository.findOne({
+      where: { id: classEntity.id },
+      relations: ['teacher', 'discipline'],
+    }) as Promise<Class>;
+  }
+
+  async findByTeacher(teacherId: string): Promise<Class[]> {
+    return this.classRepository.find({
+      where: { teacher: { id: teacherId } },
+      relations: ['teacher', 'discipline'],
+    });
+  }
+
   // Excluir Classe
   async remove(id: string): Promise<void> {
     const result = await this.classRepository.delete(id);
-    
+
     if (result.affected === 0) {
-      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`);
+      throw new NotFoundException(`Classe com o ID '${id}' nÃ£o encontrada.`);
     }
   }
 }
