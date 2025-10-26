@@ -27,6 +27,7 @@ export class AttendancesService {
     return this.attendanceRepository.find();
   }
 
+  
   // Buscar Frequencia por id
   async findOne(id: string): Promise<Attendance> {
     const attendance = await this.attendanceRepository.findOneBy({ id });
@@ -58,5 +59,19 @@ export class AttendancesService {
     if (result.affected === 0) {
       throw new NotFoundException(`Deparatamento com o ID '${id}' não encontrado.`);
     }
+  }
+
+  // Buscar todas as frequências de uma matrícula
+  async findAllByEnrollment(enrollmentId: string): Promise<Attendance[]> {
+    return this.attendanceRepository.find({
+      where: { enrollment: { id: enrollmentId } },
+    });
+  }
+
+  // Buscar todas as frequências de uma turma
+  async findAllByClass(classId: string): Promise<Attendance[]> {
+    return this.attendanceRepository.find({
+      where: { enrollment: { class: { id: classId } } },
+    });
   }
 }

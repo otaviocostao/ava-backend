@@ -27,6 +27,7 @@ export class AttendancesController {
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.attendancesService.findOne(id);
   }
+  
 
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza o status de presença de um aluno.' })
@@ -39,5 +40,17 @@ export class AttendancesController {
   @ApiOperation({ summary: 'Remove um registro de frequência.' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.attendancesService.remove(id);
+  }
+
+  @Get('enrollment/:enrollmentId')
+  @ApiOperation({ summary: 'Lista todas as frequências de uma matrícula.' })
+  findAllByEnrollment(@Param('enrollmentId', ParseUUIDPipe) enrollmentId: string) {
+    return this.attendancesService.findAllByEnrollment(enrollmentId);
+  }
+
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista todas as frequências de uma turma.' })
+  findAllByClass(@Param('classId', ParseUUIDPipe) classId: string) {
+    return this.attendancesService.findAllByClass(classId);
   }
 }
