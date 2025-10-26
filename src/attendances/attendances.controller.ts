@@ -1,8 +1,9 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AttendancesService } from './attendances.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { AttendanceTableRowDto } from './dto/attendance-table.dto';
 
 @ApiTags('Attendances')
 @Controller('attendances')
@@ -61,6 +62,11 @@ export class AttendancesController {
 
   @Get('class/:classId/table')
   @ApiOperation({ summary: 'Retorna a tabela de presencas de uma turma para o front.' })
+  @ApiOkResponse({
+    description: 'Tabela com as presencas de cada aluno da turma.',
+    type: AttendanceTableRowDto,
+    isArray: true,
+  })
   getAttendanceTable(@Param('classId', ParseUUIDPipe) classId: string) {
     return this.attendancesService.getClassAttendanceTable(classId);
   }
