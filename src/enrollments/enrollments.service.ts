@@ -88,4 +88,38 @@ export class EnrollmentsService {
       throw new NotFoundException(`Matrícula com ID "${id}" não encontrada.`);
     }
   }
+
+  // Atualizar matricula
+  async update(id: string, updateEnrollmentDto: UpdateEnrollmentDto): Promise<Enrollment> {
+    const enrollment = await this.findOne(id);
+
+    const { studentId, classId } = updateEnrollmentDto;
+
+    if (studentId) {
+      const student = await this.userRepository.findOneBy({ id: studentId });
+      if (!student) {
+        throw new NotFoundException(`Aluno com ID "${studentId}" não encontrado.`);
+      }
+      enrollment.student = student;
+    }
+
+    if (classId) {
+      const classInstance = await this.classRepository.findOneBy({ id: classId });
+      if (!classInstance) {
+        throw new NotFoundException(`Turma com ID "${classId}" não encontrada.`);
+      }
+      enrollment.class = classInstance;
+    }
+
+    const existingEnrollment = await this.enrollmentRepository.findOneBy({
+      student: { id: enrollment.student.id },
+      class: { id: enrollment.class.id },
+    });
+
+    if (existingEnrollment && existingEnrollment.id !== id) {
+      throw new ConflictException('Este aluno já está matriculado nesta turma.');
+    }
+
+    return this.enrollmentRepository.save(enrollment);
+  }
 }

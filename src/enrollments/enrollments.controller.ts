@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EnrollmentsService } from './enrollments.service';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
+import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { IsOptional, IsUUID } from 'class-validator';
 
 class FindEnrollmentsQueryDto {
@@ -43,5 +44,11 @@ export class EnrollmentsController {
   @ApiOperation({ summary: 'Remove uma matrícula existente.' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.enrollmentsService.remove(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Atualiza uma matrícula existente.' })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateEnrollmentDto: UpdateEnrollmentDto) {
+    return this.enrollmentsService.update(id, updateEnrollmentDto);
   }
 }
