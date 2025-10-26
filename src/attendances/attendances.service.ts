@@ -4,74 +4,152 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Attendance } from './entities/attendance.entity';
 import { Repository } from 'typeorm';
+import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
+import { AttendanceTableRowDto } from './dto/attendance-table.dto';
 
 @Injectable()
 export class AttendancesService {
 
-  constructor (
+  constructor(
     @InjectRepository(Attendance)
-    private readonly attendanceRepository: Repository<Attendance>
+    private readonly attendanceRepository: Repository<Attendance>,
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>,
   ) {}
 
-  // Criar nova Frequencia
-  async create(createAttendanceDto: CreateAttendanceDto) {
+  // Criar nova Frequencia e ligar ao aluno
+  async create(createAttendanceDto: CreateAttendanceDto): Promise<Attendance> {
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { id: createAttendanceDto.enrollment_id },
+      relations: ['student'],
+    });
 
-    const attendance = this.attendanceRepository.create(createAttendanceDto);
+    if (!enrollment) {
+      throw new NotFoundException(`Matricula com o ID '${createAttendanceDto.enrollment_id}' nao encontrada.`);
+    }
 
-    return await this.attendanceRepository.save(attendance);
+    const attendance = this.attendanceRepository.create({
+      date: createAttendanceDto.date,
+      present: createAttendanceDto.present ?? false,
+      enrollment,
+      student: enrollment.student,
+    });
+
+    return this.attendanceRepository.save(attendance);
   }
 
   // Buscar todas as Frequencias
-  findAll() : Promise<Attendance[]> {
-
-    return this.attendanceRepository.find();
+  async findAll(): Promise<Attendance[]> {
+    return this.attendanceRepository.find({
+      relations: ['student', 'enrollment'],
+    });
   }
 
-  
   // Buscar Frequencia por id
   async findOne(id: string): Promise<Attendance> {
-    const attendance = await this.attendanceRepository.findOneBy({ id });
+    const attendance = await this.attendanceRepository.findOne({
+      where: { id },
+      relations: ['student', 'enrollment'],
+    });
 
-    if(!attendance){
-      throw new NotFoundException(`Frequencia com o ID '${id}' não encontrado.`)
+    if (!attendance) {
+      throw new NotFoundException(`Frequencia com o ID '${id}' nao encontrada.`);
     }
     return attendance;
   }
 
   //Atualizar Frequencia
   async update(id: string, updateAttendanceDto: UpdateAttendanceDto): Promise<Attendance> {
-    const attendance = await this.attendanceRepository.preload({ 
-      id,
-      ...updateAttendanceDto,
+    const attendance = await this.attendanceRepository.findOne({
+      where: { id },
+      relations: ['enrollment', 'student'],
     });
 
-    if(!attendance){
-      throw new NotFoundException(`Frequencia com o ID '${id}' não encontrado.`)
+    if (!attendance) {
+      throw new NotFoundException(`Frequencia com o ID '${id}' nao encontrada.`);
     }
 
-    return await this.attendanceRepository.save(attendance);
+    if (updateAttendanceDto.enrollment_id && updateAttendanceDto.enrollment_id !== attendance.enrollment.id) {
+      const enrollment = await this.enrollmentRepository.findOne({
+        where: { id: updateAttendanceDto.enrollment_id },
+        relations: ['student'],
+      });
+
+      if (!enrollment) {
+        throw new NotFoundException(`Matricula com o ID '${updateAttendanceDto.enrollment_id}' nao encontrada.`);
+      }
+
+      attendance.enrollment = enrollment;
+      attendance.student = enrollment.student;
+    }
+
+    if (typeof updateAttendanceDto.present === 'boolean') {
+      attendance.present = updateAttendanceDto.present;
+    }
+
+    if (updateAttendanceDto.date) {
+      attendance.date = updateAttendanceDto.date;
+    }
+
+    return this.attendanceRepository.save(attendance);
   }
 
   // Excluir Attendance
   async remove(id: string): Promise<void> {
     const result = await this.attendanceRepository.delete(id);
-    
+
     if (result.affected === 0) {
-      throw new NotFoundException(`Deparatamento com o ID '${id}' não encontrado.`);
+      throw new NotFoundException(`Frequencia com o ID '${id}' nao encontrada.`);
     }
   }
 
-  // Buscar todas as frequências de uma matrícula
+  // Buscar todas as frequencias de uma matricula
   async findAllByEnrollment(enrollmentId: string): Promise<Attendance[]> {
     return this.attendanceRepository.find({
       where: { enrollment: { id: enrollmentId } },
+      relations: ['student', 'enrollment'],
     });
   }
 
-  // Buscar todas as frequências de uma turma
+  // Buscar todas as frequencias de uma turma
   async findAllByClass(classId: string): Promise<Attendance[]> {
     return this.attendanceRepository.find({
       where: { enrollment: { class: { id: classId } } },
+      relations: ['student', 'enrollment'],
     });
+  }
+
+  // Buscar todas as frequencias por aluno
+  async findAllByStudent(studentId: string): Promise<Attendance[]> {
+    return this.attendanceRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['student', 'enrollment'],
+    });
+  }
+
+  // Montar a tabela de presencas para o front-end
+  async getClassAttendanceTable(classId: string): Promise<AttendanceTableRowDto[]> {
+    const enrollments = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoinAndSelect('enrollment.student', 'student')
+      .leftJoinAndSelect('enrollment.attendances', 'attendance')
+      .leftJoin('enrollment.class', 'class')
+      .where('class.id = :classId', { classId })
+      .orderBy('student.name', 'ASC')
+      .addOrderBy('attendance.date', 'ASC')
+      .getMany();
+
+    return enrollments.map((enrollment) => ({
+      enrollmentId: enrollment.id,
+      studentId: enrollment.student.id,
+      studentName: enrollment.student.name,
+      attendances: (enrollment.attendances ?? [])
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((attendance) => ({
+          attendanceId: attendance.id,
+          date: attendance.date,
+          present: attendance.present,
+        })),
+    }));
   }
 }

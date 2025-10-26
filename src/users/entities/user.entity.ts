@@ -10,6 +10,7 @@ import { Availability } from "src/availabilities/entities/availability.entity";
 import { Material } from "src/materials/entities/material.entity";
 import { VideoLesson } from "src/video-lessons/entities/video-lesson.entity";
 import { News } from "src/news/entities/news.entity";
+import { Attendance } from "src/attendances/entities/attendance.entity";
 
 @Entity("users")
 export class User {
@@ -49,6 +50,9 @@ export class User {
 
     @OneToMany(() => Enrollment, (enrollment) => enrollment.student)
     enrollments: Enrollment[];
+
+    @OneToMany(() => Attendance, (attendance) => attendance.student)
+    attendances: Attendance[];
 
     @OneToMany(() => Payment, (payment) => payment.student)
     payments: Payment[];
