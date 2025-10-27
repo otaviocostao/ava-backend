@@ -8,7 +8,12 @@ describe('ForumPostsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ForumPostsController],
-      providers: [ForumPostsService],
+      providers: [
+        {
+          provide: ForumPostsService,
+          useValue: {},
+        },
+      ],
     }).compile();
 
     controller = module.get<ForumPostsController>(ForumPostsController);
