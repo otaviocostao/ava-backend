@@ -39,7 +39,7 @@ export class MessagesController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Edita ou revoga uma mensagem enviada pelo usuǭrio autenticado.' })
+  @ApiOperation({ summary: 'Edita ou revoga uma mensagem enviada pelo usuário autenticado.' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateMessageDto: UpdateMessageDto,
@@ -50,7 +50,7 @@ export class MessagesController {
   }
 
   @Patch(':id/read')
-  @ApiOperation({ summary: 'Marca uma mensagem como lida e/ou arquivada para o usuǭrio autenticado.' })
+  @ApiOperation({ summary: 'Marca uma mensagem como lida e/ou arquivada para o usuário autenticado.' })
   markAsRead(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() markMessageReadDto: MarkMessageReadDto,
@@ -62,10 +62,9 @@ export class MessagesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove uma mensagem enviada pelo usuǭrio autenticado.' })
+  @ApiOperation({ summary: 'Remove uma mensagem enviada pelo usuário autenticado.' })
   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
     const requestingUserId = req.user.id;
     return this.messagesService.remove(id, requestingUserId);
   }
 }
-

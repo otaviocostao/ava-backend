@@ -84,7 +84,7 @@ export class MessagesService {
     await this.ensureClassParticipation(
       classId,
       requestingUserId,
-      'VocǦ nǜo tem permissǜo para visualizar as mensagens desta turma.',
+      'Você não tem permissão para visualizar as mensagens desta turma.',
     );
 
     return this.messageRepository.find({
@@ -101,11 +101,11 @@ export class MessagesService {
     });
 
     if (!message) {
-      throw new NotFoundException(`Mensagem com ID "${messageId}" nǜo encontrada.`);
+      throw new NotFoundException(`Mensagem com ID "${messageId}" não encontrada.`);
     }
 
     if (message.sender.id !== requestingUserId) {
-      throw new ForbiddenException('VocǦ s�� pode editar ou revogar suas pr��prias mensagens.');
+      throw new ForbiddenException('Você só pode editar ou revogar suas próprias mensagens.');
     }
 
     const { content, receiverId, classId, recall } = updateMessageDto;
@@ -119,14 +119,14 @@ export class MessagesService {
     }
 
     if (message.isRecalled) {
-      throw new BadRequestException('Nǜo �% poss��vel editar uma mensagem j�� revogada.');
+      throw new BadRequestException('Não é possível editar uma mensagem já revogada.');
     }
 
     let hasChanges = false;
 
     if (typeof content === 'string') {
       if (!content.trim()) {
-        throw new BadRequestException('O conteǧdo editado da mensagem nǜo pode ser vazio.');
+        throw new BadRequestException('O conteúdo editado da mensagem não pode ser vazio.');
       }
 
       if (content !== message.content) {
@@ -139,12 +139,12 @@ export class MessagesService {
 
     if (typeof receiverId !== 'undefined') {
       if (receiverId === requestingUserId) {
-        throw new BadRequestException('VocǦ nǜo pode definir a si mesmo como destinatǭrio.');
+        throw new BadRequestException('Você não pode definir a si mesmo como destinatário.');
       }
 
       const receiver = await this.userRepository.findOneBy({ id: receiverId });
       if (!receiver) {
-        throw new NotFoundException(`Destinatǭrio com ID "${receiverId}" nǜo encontrado.`);
+        throw new NotFoundException(`Destinatário com ID "${receiverId}" não encontrado.`);
       }
 
       message.receiver = receiver;
@@ -156,7 +156,7 @@ export class MessagesService {
       const classInstance = await this.ensureClassParticipation(
         classId,
         requestingUserId,
-        'VocǦ nǜo tem permissǜo para publicar nesta turma.',
+        'Você não tem permissão para publicar nesta turma.',
       );
 
       message.class = classInstance;
@@ -165,7 +165,7 @@ export class MessagesService {
     }
 
     if (!message.receiver && !message.class) {
-      throw new BadRequestException('Uma mensagem precisa possuir um destinatǭrio privado ou uma turma.');
+      throw new BadRequestException('Uma mensagem precisa possuir um destinatário privado ou uma turma.');
     }
 
     if (!hasChanges) {
@@ -186,7 +186,7 @@ export class MessagesService {
     });
 
     if (!message) {
-      throw new NotFoundException(`Mensagem com ID "${messageId}" nǜo encontrada.`);
+      throw new NotFoundException(`Mensagem com ID "${messageId}" não encontrada.`);
     }
 
     const isDirectReceiver = message.receiver?.id === requestingUserId;
@@ -196,13 +196,13 @@ export class MessagesService {
       await this.ensureClassParticipation(
         message.class.id,
         requestingUserId,
-        'VocǦ nǜo participa desta turma.',
+        'Você não participa desta turma.',
       );
       isClassParticipant = true;
     }
 
     if (!isDirectReceiver && !isClassParticipant) {
-      throw new ForbiddenException('Apenas destinatǭrios podem atualizar o status da mensagem.');
+      throw new ForbiddenException('Apenas destinatários podem atualizar o status da mensagem.');
     }
 
     const payload = markMessageReadDto ?? {};
@@ -241,11 +241,11 @@ export class MessagesService {
     });
 
     if (!message) {
-      throw new NotFoundException(`Mensagem com ID "${messageId}" nǜo encontrada.`);
+      throw new NotFoundException(`Mensagem com ID "${messageId}" não encontrada.`);
     }
 
     if (message.sender.id !== requestingUserId) {
-      throw new ForbiddenException('VocǦ s�� pode remover suas pr��prias mensagens.');
+      throw new ForbiddenException('Você só pode remover suas próprias mensagens.');
     }
 
     await this.messageRepository.remove(message);
@@ -254,7 +254,7 @@ export class MessagesService {
   private async ensureClassParticipation(classId: string, userId: string, forbiddenMessage: string): Promise<Class> {
     const classInstance = await this.classRepository.findOne({ where: { id: classId }, relations: ['teacher'] });
     if (!classInstance) {
-      throw new NotFoundException(`Turma com ID "${classId}" nǜo encontrada.`);
+      throw new NotFoundException(`Turma com ID "${classId}" não encontrada.`);
     }
 
     const isTeacher = classInstance.teacher?.id === userId;
@@ -274,4 +274,3 @@ export class MessagesService {
     return classInstance;
   }
 }
-

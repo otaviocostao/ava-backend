@@ -25,14 +25,14 @@ export class ClassesService {
 
     const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
     if (!discipline) {
-      throw new NotFoundException(`Disciplina com ID "${disciplineId}" nǜo encontrada.`);
+      throw new NotFoundException(`Disciplina com ID "${disciplineId}" não encontrada.`);
     }
 
     let teacher: User | null = null;
     if (teacherId) {
       teacher = await this.userRepository.findOneBy({ id: teacherId });
       if (!teacher) {
-        throw new NotFoundException(`Usuário com ID "${teacherId}" nǜo encontrado.`);
+        throw new NotFoundException(`Usuário com ID "${teacherId}" não encontrado.`);
       }
     }
 
@@ -58,7 +58,7 @@ export class ClassesService {
     });
 
     if (!classEntity){
-      throw new NotFoundException(`Classe com o ID '${id}' nǜo encontrada.`)
+      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`)
     }
     return classEntity;
   }
@@ -73,13 +73,13 @@ export class ClassesService {
     });
 
     if (!classEntity){
-      throw new NotFoundException(`Classe com o ID '${id}' nǜo encontrada.`)
+      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`)
     }
 
     if (disciplineId) {
       const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
       if (!discipline) {
-        throw new NotFoundException(`Disciplina com ID "${disciplineId}" nǜo encontrada.`);
+        throw new NotFoundException(`Disciplina com ID "${disciplineId}" não encontrada.`);
       }
       classEntity.discipline = discipline;
     }
@@ -87,7 +87,7 @@ export class ClassesService {
     if (teacherId) {
       const teacher = await this.userRepository.findOneBy({ id: teacherId });
       if (!teacher) {
-        throw new NotFoundException(`Usuário com ID "${teacherId}" nǜo encontrado.`);
+        throw new NotFoundException(`Usuário com ID "${teacherId}" não encontrado.`);
       }
       classEntity.teacher = teacher;
     }
@@ -102,12 +102,12 @@ export class ClassesService {
     });
 
     if (!classEntity) {
-      throw new NotFoundException(`Classe com o ID '${classId}' nǜo encontrada.`);
+      throw new NotFoundException(`Classe com o ID '${classId}' não encontrada.`);
     }
 
     const teacher = await this.userRepository.findOneBy({ id: teacherId });
     if (!teacher) {
-      throw new NotFoundException(`Usuário com ID "${teacherId}" nǜo encontrado.`);
+      throw new NotFoundException(`Usuário com ID "${teacherId}" não encontrado.`);
     }
 
     classEntity.teacher = teacher;
@@ -131,7 +131,7 @@ export class ClassesService {
     const result = await this.classRepository.delete(id);
 
     if (result.affected === 0) {
-      throw new NotFoundException(`Classe com o ID '${id}' nÃ£o encontrada.`);
+      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`);
     }
   }
 }
