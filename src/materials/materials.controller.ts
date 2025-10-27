@@ -41,6 +41,8 @@ export class MaterialsController {
     return this.materialsService.remove(id);
   }
 
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista todos os materiais de uma turma específica.' })
   findByClassId(@Param('classId') classId: string) {
     return this.materialsService.findByClassId(classId);
   }

@@ -8,11 +8,12 @@ import { Class } from 'src/classes/entities/class.entity';
 
 @Injectable()
 export class SchedulesService {
-    @InjectRepository(Schedule) private readonly scheduleRepository: Repository<Schedule>;
-
-    @InjectRepository(Class) private readonly classRepository: Repository<Class>;
   constructor(
-
+    @InjectRepository(Schedule)
+    private readonly scheduleRepository: Repository<Schedule>,
+    
+    @InjectRepository(Class)
+    private readonly classRepository: Repository<Class>,
   ) {}
 
   async create(createScheduleDto: CreateScheduleDto) : Promise<Schedule> {
