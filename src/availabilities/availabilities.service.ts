@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
 import { Availability } from './entities/availability.entity';
+import { DayOfWeek } from 'src/common/enums/day-of-week.enum';
 
 @Injectable()
 export class AvailabilitiesService {
@@ -67,5 +68,30 @@ export class AvailabilitiesService {
     if (result.affected === 0) {
       throw new NotFoundException(`Disponibilidade com ID "${id}" não encontrada.`);
     }
+  }
+
+  // Busca as disponibilidades de um professor, com suporte a filtros opcionais por semestre/dia.
+  async findByTeacherId(
+    teacherId: string,
+    filters?: { semester?: string; dayOfWeek?: DayOfWeek }
+  ) {
+    const whereClause: any = { teacher: { id: teacherId } };
+
+    if (filters?.semester) {
+      whereClause.semester = filters.semester;
+    }
+    if (filters?.dayOfWeek) {
+      whereClause.dayOfWeek = filters.dayOfWeek;
+    }
+
+    const availabilities = await this.availabilityRepository.find({ where: whereClause });
+
+    if (!availabilities || availabilities.length === 0) {
+      throw new NotFoundException(
+        `Disponibilidades do professor com ID "${teacherId}" não encontradas${filters?.semester ? ` no semestre "${filters.semester}"` : ''}${filters?.dayOfWeek ? ` no dia "${filters.dayOfWeek}"` : ''}.`
+      );
+    }
+
+    return availabilities;
   }
 }
