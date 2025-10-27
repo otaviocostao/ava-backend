@@ -32,18 +32,49 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_DATABASE'),
-        
-        autoLoadEntities: true,
-        
-        synchronize: true,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        const isSupabase = !!databaseUrl;
+
+        console.log('\n🔍 Configuração do Banco de Dados:');
+        if (isSupabase) {
+          console.log('✅ Usando Supabase (DATABASE_URL configurada)');
+          console.log('📍 Connection: PostgreSQL via URL');
+          console.log('🔒 SSL: Habilitado (rejectUnauthorized: false)');
+        } else {
+          console.log('✅ Usando PostgreSQL Local');
+          console.log(`📍 Host: ${configService.get<string>('DB_HOST', 'localhost')}`);
+          console.log(`📍 Porta: ${configService.get<number>('DB_PORT', 5432)}`);
+          console.log(`📍 Database: ${configService.get<string>('DB_DATABASE', 'ava_db')}`);
+          console.log('🔒 SSL: Não necessário (conexão local)');
+        }
+        console.log('🔄 Sincronização: Habilitada (tabelas serão criadas automaticamente)\n');
+
+        // Se DATABASE_URL estiver configurada, usa Supabase
+        if (isSupabase) {
+          return {
+            type: 'postgres',
+            url: databaseUrl,
+            autoLoadEntities: true,
+            synchronize: true,
+            ssl: {
+              rejectUnauthorized: false,
+            },
+          };
+        }
+
+        // Caso contrário, usa PostgreSQL local com variáveis separadas
+        return {
+          type: 'postgres',
+          host: configService.get<string>('DB_HOST'),
+          port: configService.get<number>('DB_PORT'),
+          username: configService.get<string>('DB_USERNAME'),
+          password: configService.get<string>('DB_PASSWORD'),
+          database: configService.get<string>('DB_DATABASE'),
+          autoLoadEntities: true,
+          synchronize: true,
+        };
+      },
     }),
     UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule
   ],
