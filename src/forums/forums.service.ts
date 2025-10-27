@@ -66,4 +66,14 @@ export class ForumsService {
       throw new NotFoundException(`Fórum com ID "${id}" não encontrado.`);
     }
   }
+
+  async findByClassId(classId: string): Promise<Forum[]> {
+    const forums = await this.forumRepository.find({ where: { class: { id: classId } } });
+
+    if (!forums) {
+      throw new NotFoundException(`Fóruns da turma com ID "${classId}" não encontrados.`);
+    }
+    
+    return forums;
+  }
 }

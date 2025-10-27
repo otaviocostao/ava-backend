@@ -40,4 +40,10 @@ export class LessonPlansController {
   remove(@Param('id') id: string) {
     return this.lessonPlansService.remove(id);
   }
+
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista todos os planos de aula de uma turma específica.' })
+  findByClassId(@Param('classId') classId: string) {
+    return this.lessonPlansService.findByClassId(classId);
+  }
 }

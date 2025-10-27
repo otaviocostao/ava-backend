@@ -40,4 +40,10 @@ export class SchedulesController {
   remove(@Param('id') id: string) {
     return this.schedulesService.remove(id);
   }
+
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista todos os horários de uma turma específica.' })
+  findByClassId(@Param('classId') classId: string) {
+    return this.schedulesService.findByClassId(classId);
+  }
 }

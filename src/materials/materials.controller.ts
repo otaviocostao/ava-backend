@@ -40,4 +40,8 @@ export class MaterialsController {
   remove(@Param('id') id: string) {
     return this.materialsService.remove(id);
   }
+
+  findByClassId(@Param('classId') classId: string) {
+    return this.materialsService.findByClassId(classId);
+  }
 }

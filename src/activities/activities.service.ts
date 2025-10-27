@@ -44,4 +44,14 @@ export class ActivitiesService {
     const activity = await this.findOne(id);
     await this.activityRepository.remove(activity);
   }
+
+  async findByClassId(classId: string): Promise<Activity[]> {
+    const activities = await this.activityRepository.find({ where: { class: { id: classId } } });
+
+    if (!activities) {
+      throw new NotFoundException(`Atividades da turma com ID "${classId}" não encontradas.`);
+    }
+    
+    return activities;
+  }
 }

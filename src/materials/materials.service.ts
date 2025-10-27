@@ -77,4 +77,14 @@ export class MaterialsService {
       throw new NotFoundException(`Material com ID "${id}" não encontrado.`);
     }
   }
+
+  async findByClassId(classId: string): Promise<Material[]> {
+    const materials = await this.materialRepository.find({ where: { class: { id: classId } } });
+
+    if (!materials) {
+      throw new NotFoundException(`Materiais da turma com ID "${classId}" não encontrados.`);
+    }
+    
+    return materials;
+  }
 }

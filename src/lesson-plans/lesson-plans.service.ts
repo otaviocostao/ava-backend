@@ -68,4 +68,14 @@ export class LessonPlansService {
       throw new NotFoundException(`Plano de aula com ID "${id}" não encontrado.`);
     }
   }
+
+  async findByClassId(classId: string): Promise<LessonPlan[]> {
+    const lessonPlans = await this.lessonPlanRepository.find({ where: { class: { id: classId } } });
+
+    if (!lessonPlans) {
+      throw new NotFoundException(`Planos de aula da turma com ID "${classId}" não encontrados.`);
+    }
+    
+    return lessonPlans;
+  }
 }

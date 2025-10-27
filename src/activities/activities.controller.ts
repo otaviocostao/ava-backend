@@ -38,4 +38,10 @@ export class ActivitiesController {
   remove(@Param('id') id: string) {
     return this.activitiesService.remove(id);
   }
+
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista todas as atividades de uma turma específica.' })
+  findByClassId(@Param('classId') classId: string) {
+    return this.activitiesService.findByClassId(classId);
+  }
 }

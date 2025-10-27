@@ -65,4 +65,14 @@ export class SchedulesService {
       throw new NotFoundException(`Grade horária com ID "${id}" não encontrada.`);
     };
   }
+
+  async findByClassId(classId: string): Promise<Schedule[]> {
+    const schedules = await this.scheduleRepository.find({ where: { class: { id: classId } } });
+
+    if (!schedules) {
+      throw new NotFoundException(`Grade horária da turma com ID "${classId}" não encontrada.`);
+    }
+    
+    return schedules;
+  }
 }

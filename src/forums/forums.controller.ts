@@ -40,4 +40,10 @@ export class ForumsController {
   remove(@Param('id') id: string) {
     return this.forumsService.remove(id);
   }
+
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista todos os fóruns de uma turma específica.' })
+  findByClassId(@Param('classId') classId: string) {
+    return this.forumsService.findByClassId(classId);
+  }
 }
