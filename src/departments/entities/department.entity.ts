@@ -15,7 +15,7 @@ export class Department {
         onDelete: 'SET NULL',
     })
     @JoinColumn({ name: 'coordinator_id' }) 
-    coordinator: User;
+    coordinator: User | null;
 
     @OneToMany(() => Course, (course) => course.department)
     courses: Course[];

@@ -4,13 +4,17 @@ import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { Department } from './entities/department.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { SetCoordinatorDto } from './dto/set-coordinator.dto';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class DepartmentsService {
 
   constructor (
     @InjectRepository(Department)
-    private readonly departmentRepository: Repository<Department>
+    private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   // Criar nova Departamento
@@ -65,5 +69,21 @@ export class DepartmentsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Deparatamento com o ID '${id}' não encontrado.`);
     }
+  }
+
+  async setCoordinator(id: string, { coordinatorId }: SetCoordinatorDto): Promise<Department> {
+    const department = await this.findOne(id);
+    if (coordinatorId) {
+      const coordinator = await this.userRepository.findOneBy({ id: coordinatorId });
+      if (!coordinator) {
+        throw new NotFoundException(
+          `Coordenador com o ID '${coordinatorId}' não encontrado.`,
+        );
+      }
+      department.coordinator = coordinator;
+    } else {
+      department.coordinator = null;
+    }
+    return this.departmentRepository.save(department);
   }
 }
