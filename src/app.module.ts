@@ -23,6 +23,8 @@ import { ForumPostsModule } from './forum-posts/forum-posts.module';
 import { MessagesModule } from './messages/messages.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { LiveClassGateway } from './live-class/live-class.gateway';
+import { LiveClassModule } from './live-class/live-class.module';
 
 @Module({
   imports: [
@@ -76,9 +78,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         };
       },
     }),
-    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule
+    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, LiveClassGateway],
 })
 export class AppModule {}
