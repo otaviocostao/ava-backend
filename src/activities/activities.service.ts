@@ -4,16 +4,35 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Activity } from './entities/activity.entity';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Injectable()
 export class ActivitiesService {
   constructor(
     @InjectRepository(Activity)
     private readonly activityRepository: Repository<Activity>,
+    @InjectRepository(Class)
+    private readonly classRepository: Repository<Class>,
   ) {}
 
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
-    const activity = this.activityRepository.create(createActivityDto);
+    const { class_id, ...rest } = createActivityDto;
+
+    const classEntity = await this.classRepository.findOne({
+      where: { id: class_id },
+    });
+
+    if (!classEntity) {
+      throw new NotFoundException(
+        `Turma com ID "${class_id}" nao encontrada.`,
+      );
+    }
+
+    const activity = this.activityRepository.create({
+      ...rest,
+      class: classEntity,
+    });
+
     return this.activityRepository.save(activity);
   }
 
@@ -22,7 +41,10 @@ export class ActivitiesService {
   }
 
   async findOne(id: string): Promise<Activity> {
-    const activity = await this.activityRepository.findOne({ where: { id } });
+    const activity = await this.activityRepository.findOne({
+      where: { id },
+      relations: ['class'],
+    });
     if (!activity) {
       throw new NotFoundException(`Activity with ID "${id}" not found`);
     }
@@ -30,10 +52,28 @@ export class ActivitiesService {
   }
 
   async update(id: string, updateActivityDto: UpdateActivityDto): Promise<Activity> {
-    const activity = await this.activityRepository.preload({
+    const { class_id, ...rest } = updateActivityDto;
+
+    const preloadData: Partial<Activity> = {
       id,
-      ...updateActivityDto,
-    });
+      ...rest,
+    };
+
+    if (class_id !== undefined) {
+      const classEntity = await this.classRepository.findOne({
+        where: { id: class_id },
+      });
+
+      if (!classEntity) {
+        throw new NotFoundException(
+          `Turma com ID "${class_id}" nao encontrada.`,
+        );
+      }
+
+      preloadData.class = classEntity;
+    }
+
+    const activity = await this.activityRepository.preload(preloadData);
     if (!activity) {
       throw new NotFoundException(`Activity with ID "${id}" not found`);
     }
