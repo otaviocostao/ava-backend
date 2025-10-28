@@ -2,7 +2,9 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Activity } from '../activities/entities/activity.entity';
+import { Class } from '../classes/entities/class.entity';
 import { Enrollment } from '../enrollments/entities/enrollment.entity';
+import { User } from '../users/entities/user.entity';
 import { Grade } from './entities/grade.entity';
 import { GradesService } from './grades.service';
 
@@ -23,16 +25,28 @@ const createActivityRepositoryMock = () => ({
   findOne: jest.fn(),
 });
 
+const createClassRepositoryMock = () => ({
+  findOne: jest.fn(),
+});
+
+const createUserRepositoryMock = () => ({
+  findOne: jest.fn(),
+});
+
 describe('GradesService', () => {
   let service: GradesService;
   let gradesRepositoryMock: ReturnType<typeof createGradesRepositoryMock>;
   let enrollmentRepositoryMock: ReturnType<typeof createEnrollmentRepositoryMock>;
   let activityRepositoryMock: ReturnType<typeof createActivityRepositoryMock>;
+  let classRepositoryMock: ReturnType<typeof createClassRepositoryMock>;
+  let userRepositoryMock: ReturnType<typeof createUserRepositoryMock>;
 
   beforeEach(async () => {
     gradesRepositoryMock = createGradesRepositoryMock();
     enrollmentRepositoryMock = createEnrollmentRepositoryMock();
     activityRepositoryMock = createActivityRepositoryMock();
+    classRepositoryMock = createClassRepositoryMock();
+    userRepositoryMock = createUserRepositoryMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -48,6 +62,14 @@ describe('GradesService', () => {
         {
           provide: getRepositoryToken(Activity),
           useValue: activityRepositoryMock,
+        },
+        {
+          provide: getRepositoryToken(Class),
+          useValue: classRepositoryMock,
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: userRepositoryMock,
         },
       ],
     }).compile();
