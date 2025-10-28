@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -6,6 +6,12 @@ import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { Payment } from './entities/payment.entity';
 import { User } from 'src/users/entities/user.entity';
 import { PaymentStatus } from 'src/common/enums/payment-status.enum';
+
+interface FindPaymentsQuery {
+  status?: PaymentStatus;
+  dueDateStart?: string;
+  dueDateEnd?: string;
+}
 
 @Injectable()
 export class PaymentsService {
@@ -39,6 +45,45 @@ export class PaymentsService {
       where: { student: { id: studentId } },
       order: { dueDate: 'DESC' },
     });
+  }
+
+  async findAll(query: FindPaymentsQuery): Promise<Payment[]> {
+    const qb = this.paymentRepository
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.student', 'student')
+      .orderBy('payment.dueDate', 'DESC');
+
+    if (query.status) {
+      qb.andWhere('payment.status = :status', { status: query.status });
+    }
+
+    if (query.dueDateStart) {
+      const start = new Date(query.dueDateStart);
+      if (Number.isNaN(start.getTime())) {
+        throw new BadRequestException('dueDateStart deve ser uma data valida (YYYY-MM-DD).');
+      }
+      qb.andWhere('payment.dueDate >= :dueDateStart', {
+        dueDateStart: query.dueDateStart,
+      });
+    }
+
+    if (query.dueDateEnd) {
+      const end = new Date(query.dueDateEnd);
+      if (Number.isNaN(end.getTime())) {
+        throw new BadRequestException('dueDateEnd deve ser uma data valida (YYYY-MM-DD).');
+      }
+      qb.andWhere('payment.dueDate <= :dueDateEnd', {
+        dueDateEnd: query.dueDateEnd,
+      });
+    }
+
+    if (query.dueDateStart && query.dueDateEnd) {
+      if (new Date(query.dueDateStart) > new Date(query.dueDateEnd)) {
+        throw new BadRequestException('dueDateStart deve ser anterior ou igual a dueDateEnd.');
+      }
+    }
+
+    return qb.getMany();
   }
 
   async findOne(id: string): Promise<Payment> {
