@@ -1,5 +1,4 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinTable, ManyToMany, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
-import * as bcrypt from 'bcrypt';
+import { Column, CreateDateColumn, Entity, JoinTable, ManyToMany, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Role } from "src/roles/entities/role.entity";
 import { ForumPost } from "src/forum-posts/entities/forum-post.entity";
 import { Message } from "src/messages/entities/message.entity";
@@ -33,12 +32,7 @@ export class User {
     @UpdateDateColumn({ name: 'updated_at', type: 'timestamp with time zone' })
     updatedAt: Date;
 
-    @BeforeInsert()
-    async hashPassword() {
-        if (this.password) {
-        this.password = await bcrypt.hash(this.password, 10);
-        }
-    }
+    // Hash de senha movido para o serviço (UsersService)
 
     @ManyToMany(() => Role, { eager: true })
     @JoinTable({

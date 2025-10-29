@@ -60,7 +60,6 @@ export class UsersController {
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body('roleId', ParseUUIDPipe) roleId: string,
   ) {
-    console.log('Associating role:', { userId, roleId });
     return this.usersService.assignRoleToUser(userId, roleId);
   }
 

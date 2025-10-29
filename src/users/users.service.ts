@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { ResponseUserDto } from './dto/response-user.dto';
+// Removido ResponseUserDto em favor de retorno direto da entidade sem o campo de senha
 import { Role } from 'src/roles/entities/role.entity';
 
 
@@ -19,7 +19,7 @@ export class UsersService {
     private readonly roleRepository: Repository<Role>
   ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<ResponseUserDto> {
+  async create(createUserDto: CreateUserDto): Promise<User> {
     const existingUser = await this.userRepository.findOneBy({
       email: createUserDto.email,
     });
@@ -27,25 +27,29 @@ export class UsersService {
       throw new ConflictException('O e-mail informado já está em uso.');
     }
 
-    const user = this.userRepository.create(createUserDto);
+    const passwordHash = await bcrypt.hash(createUserDto.password, 10);
+    const user = this.userRepository.create({
+      ...createUserDto,
+      password: passwordHash,
+    });
     const savedUser = await this.userRepository.save(user);
 
-    return new ResponseUserDto(savedUser);
+    return savedUser;
   }
 
   findAll(): Promise<User[]> {
     return this.userRepository.find();
   }
 
-  async findOne(id: string): Promise<ResponseUserDto> {
-    const user = await this.userRepository.findOneBy({ id });
+  async findOne(id: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException(`Usuário com o ID '${id}' não encontrado.`);
     }
     return user;
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<ResponseUserDto> {
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.userRepository.preload({
       id,
       ...updateUserDto,
@@ -61,7 +65,7 @@ export class UsersService {
 
     const savedUser = await this.userRepository.save(user);
 
-    return new ResponseUserDto(savedUser);
+    return savedUser;
   }
 
   async remove(id: string): Promise<void> {
