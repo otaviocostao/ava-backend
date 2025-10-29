@@ -1,7 +1,7 @@
 import { CourseStatus } from "src/common/enums/course-status.enum";
 import { Department } from "src/departments/entities/department.entity";
 import { Discipline } from "src/disciplines/entities/discipline.entity";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToMany, ManyToOne, PrimaryGeneratedColumn, JoinTable } from "typeorm";
 
 @Entity("courses")
 export class Course {
@@ -23,6 +23,11 @@ export class Course {
     })
     status: CourseStatus;
 
-    @OneToMany(() => Discipline, (discipline) => discipline.course)
+    @ManyToMany(() => Discipline, (discipline) => discipline.courses)
+    @JoinTable({
+      name: 'courses_disciplines',
+      joinColumn: { name: 'course_id', referencedColumnName: 'id' },
+      inverseJoinColumn: { name: 'discipline_id', referencedColumnName: 'id' },
+    })
     disciplines: Discipline[];
 }

@@ -1,13 +1,15 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { ArrayNotEmpty, ArrayUnique, IsArray, IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
 
 export class CreateDisciplineDto {
   @IsString()
   @IsNotEmpty({ message: 'O nome da disciplina não pode ser vazio.' })
   name: string;
 
-  @IsOptional()
-  @IsUUID('4', { message: 'O ID do curso deve ser um UUID válido.' })
-  courseId?: string | null;
+  @IsArray({ message: 'courseIds deve ser um array de UUIDs.' })
+  @ArrayNotEmpty({ message: 'É obrigatório informar ao menos um curso.' })
+  @ArrayUnique({ message: 'courseIds contém valores duplicados.' })
+  @IsUUID('4', { each: true, message: 'Cada courseId deve ser um UUID válido.' })
+  courseIds: string[];
 
   @IsNumber()
   credits: number;

@@ -1,29 +1,50 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateDisciplineDto } from './dto/create-discipline.dto';
 import { UpdateDisciplineDto } from './dto/update-discipline.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Discipline } from './entities/discipline.entity';
-import { Repository } from 'typeorm';
+import { ILike, In, Not, Repository } from 'typeorm';
+import { Course } from 'src/courses/entities/course.entity';
 
 @Injectable()
 export class DisciplinesService {
 
   constructor (
     @InjectRepository(Discipline)
-    private readonly disciplineRepository: Repository<Discipline>
+    private readonly disciplineRepository: Repository<Discipline>,
+    @InjectRepository(Course)
+    private readonly courseRepository: Repository<Course>,
   ) {}
 
   // Criar nova Disciplina
   async create(createDisciplineDto: CreateDisciplineDto) {
-    const existingDiscipline = await this.disciplineRepository.findOneBy({
-      name: createDisciplineDto.name,
+    const existingDiscipline = await this.disciplineRepository.findOne({
+      where: { name: ILike(createDisciplineDto.name) },
     })
 
     if(existingDiscipline){
       throw new ConflictException('Esta Disciplina já foi criada.')
     }
 
-    const discipline = this.disciplineRepository.create(createDisciplineDto);
+    // Validar e carregar cursos obrigatórios
+    const { courseIds } = createDisciplineDto;
+    if (!courseIds || courseIds.length === 0) {
+      throw new BadRequestException('É obrigatório informar ao menos um courseId.');
+    }
+
+    const courses = await this.courseRepository.find({
+      where: { id: In(courseIds) },
+    });
+
+    if (courses.length !== courseIds.length) {
+      throw new NotFoundException('Um ou mais courseIds não foram encontrados.');
+    }
+
+    const discipline = this.disciplineRepository.create({
+      name: createDisciplineDto.name,
+      credits: createDisciplineDto.credits,
+      courses,
+    });
 
     return await this.disciplineRepository.save(discipline);
   }
@@ -45,6 +66,17 @@ export class DisciplinesService {
 
   //Atualizar Disciplina
   async update(id: string, updateDisciplineDto: UpdateDisciplineDto): Promise<Discipline> {
+    if (updateDisciplineDto.name) {
+      const conflict = await this.disciplineRepository.findOne({
+        where: {
+          name: ILike(updateDisciplineDto.name),
+          id: Not(id),
+        },
+      });
+      if (conflict) {
+        throw new ConflictException('Já existe uma disciplina com este nome.');
+      }
+    }
     const discipline = await this.disciplineRepository.preload({ 
       id,
       ...updateDisciplineDto,

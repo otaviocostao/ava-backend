@@ -7,8 +7,8 @@ export class CreateCourseDto {
     name: string;
         
     @IsUUID('4', { message: 'O ID do departamento deve ser um UUID válido.' })
-    @IsOptional()
-    departmentId?: string;
+    @IsNotEmpty({ message: 'O departmentId é obrigatório.' })
+    departmentId: string;
 
     @IsEnum(CourseStatus, { message: `O status deve ser um dos seguintes valores: ${Object.values(CourseStatus).join(', ')}` })
     @IsOptional()

@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Course } from './entities/course.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
 import { Repository } from 'typeorm';
+import { Department } from 'src/departments/entities/department.entity';
 
 @Injectable()
 export class CoursesService {
@@ -14,6 +15,8 @@ export class CoursesService {
     private readonly courseRepository: Repository<Course>,
     @InjectRepository(Discipline)
     private readonly disciplineRepository: Repository<Discipline>,
+    @InjectRepository(Department)
+    private readonly departmentRepository: Repository<Department>,
   ) {}
 
   // Criar novo Curso
@@ -25,8 +28,17 @@ export class CoursesService {
     if(existingCourse){
       throw new ConflictException('Este Curso já foi criado.')
     }
+    // Validar e carregar Department obrigatório
+    const department = await this.departmentRepository.findOne({ where: { id: createCourseDto.departmentId } });
+    if (!department) {
+      throw new NotFoundException(`Departamento com o ID '${createCourseDto.departmentId}' não encontrado.`);
+    }
 
-    const course = this.courseRepository.create(createCourseDto);
+    const course = this.courseRepository.create({
+      name: createCourseDto.name,
+      status: createCourseDto.status,
+      department,
+    });
 
     return await this.courseRepository.save(course);
   }
@@ -85,29 +97,25 @@ export class CoursesService {
 
     const discipline = await this.disciplineRepository.findOne({
       where: { id: disciplineId },
-      relations: { course: true },
+      relations: { courses: true },
     });
 
     if (!discipline) {
       throw new NotFoundException(`Disciplina com o ID '${disciplineId}' nao encontrada.`);
     }
 
-    if (discipline.course?.id === courseId) {
+    const alreadyLinked = (course.disciplines ?? []).some((d) => d.id === discipline.id);
+    if (alreadyLinked) {
       throw new ConflictException('A disciplina ja esta associada a este curso.');
     }
 
-    discipline.course = course;
-    await this.disciplineRepository.save(discipline);
+    course.disciplines = [...(course.disciplines ?? []), discipline];
+    await this.courseRepository.save(course);
 
-    const alreadyLinked = course.disciplines?.some((d) => d.id === discipline.id);
-    if (!alreadyLinked) {
-      course.disciplines = [...(course.disciplines ?? []), discipline];
-    }
-
-    return await this.courseRepository.findOne({
+    return (await this.courseRepository.findOne({
       where: { id: course.id },
       relations: ['disciplines'],
-    }) as Course;
+    })) as Course;
   }
 
   async dissociateDiscipline(courseId: string, disciplineId: string): Promise<Course> {
@@ -122,25 +130,27 @@ export class CoursesService {
 
     const discipline = await this.disciplineRepository.findOne({
       where: { id: disciplineId },
-      relations: { course: true },
+      relations: { courses: true },
     });
 
     if (!discipline) {
       throw new NotFoundException(`Disciplina com o ID '${disciplineId}' nao encontrada.`);
     }
 
-    if (discipline.course?.id === courseId) {
-      discipline.course = null;
-      await this.disciplineRepository.save(discipline);
+    const existsInCourse = (course.disciplines ?? []).some(d => d.id === disciplineId);
+    if (!existsInCourse) {
+      // Nada a fazer; manter resposta coerente retornando o curso atual
+      return course;
     }
 
     course.disciplines = (course.disciplines ?? []).filter(
       (current) => current.id !== disciplineId,
     );
+    await this.courseRepository.save(course);
 
-    return await this.courseRepository.findOne({
+    return (await this.courseRepository.findOne({
       where: { id: course.id },
       relations: ['disciplines'],
-    }) as Course;
+    })) as Course;
   }
 }
