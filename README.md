@@ -179,7 +179,7 @@ Foram criados scripts para testar a integração:
 ```bash
 # Teste completo da API (recomendado)
 node test-api.js
-
+```
 **Os scripts testam:**
 - ✅ Criação de roles e usuários
 - ✅ Listagem e busca de dados
@@ -224,5 +224,51 @@ Utilize o botao **Try it out** para testar as requisicoes diretamente pela inter
 *   `npm run start:dev`: Inicia a aplicação em modo de desenvolvimento.
 *   `npm run build`: Compila o código TypeScript para JavaScript.
 *   `npm run test`: Roda os testes unitários.
+
+---
+
+## 🗄️ Scripts de Banco de Dados
+
+O projeto inclui scripts para facilitar a configuração e população do banco de dados:
+
+### Scripts Disponíveis
+
+| Comando | Descrição | Quando Usar |
+|---------|-----------|-------------|
+| `npm run init` | Cria roles básicas e usuário admin | Primeira execução |
+| `npm run seed` | Popula o banco com dados de teste | Desenvolvimento |
+
+### Fluxo Recomendado
+
+```bash
+# 1. Primeira configuração
+npm run init
+
+# 2. Para desenvolvimento, adicionar dados de teste
+npm run seed
+```
+
+### O que cada script faz
+
+**`npm run init`:**
+- ✅ Cria 3 roles básicas: `admin`, `teacher`, `student`
+- ✅ Cria usuário administrador: `admin@ava.com`
+- ✅ Usa senha configurada em `INITIAL_ADMIN_PASSWORD` (padrão: `123456`)
+
+**`npm run seed`:**
+- ✅ Cria 4 cursos e 10 disciplinas
+- ✅ Cria 6 usuários (3 professores, 3 estudantes)
+- ✅ Cria 5 turmas com conteúdo completo
+- ✅ Cria atividades, materiais, horários, fóruns e disponibilidades
+- ⚠️ **Pré-requisito:** Execute `npm run init` primeiro
+
+### Configuração
+
+Adicione no seu arquivo `.env`:
+```env
+INITIAL_ADMIN_PASSWORD=123456
+```
+
+> 📖 **Documentação completa:** Consulte `src/database/README.md` para detalhes sobre os dados criados e exemplos de teste.
 
 ---
