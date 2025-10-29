@@ -46,6 +46,16 @@ export class RolesService {
 
   //Atualizar Role
   async update(id: string, updateRoleDto: UpdateRoleDto): Promise<Role> {
+    // Se o nome for informado na atualização, garantir unicidade
+    if (updateRoleDto.name) {
+      const conflict = await this.roleRepository.findOne({
+        where: { name: updateRoleDto.name },
+      });
+      if (conflict && conflict.id !== id) {
+        throw new ConflictException('Já existe uma Role com esse nome.');
+      }
+    }
+
     const role = await this.roleRepository.preload({ 
       id,
       ...updateRoleDto,
