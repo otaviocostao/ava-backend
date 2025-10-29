@@ -33,10 +33,16 @@ export class MessagesService {
   ): Promise<Message> {
     const { content, receiverId, classId } = createMessageDto;
 
-    const sender = await this.userRepository.findOneBy({ id: senderId });
+    const sender = await this.userRepository.findOne({
+      where: { id: senderId },
+      relations: ['roles']
+    });
     if (!sender) {
       throw new NotFoundException(`Remetente com ID "${senderId}" não encontrado.`);
     }
+
+    // Validar se o remetente é professor ou aluno
+    this.validateUserRole(sender, 'remetente');
 
     let receiver: User | null = null;
     let classInstance: Class | null = null;
@@ -45,10 +51,19 @@ export class MessagesService {
       if (senderId === receiverId) {
         throw new BadRequestException('Você não pode enviar uma mensagem para si mesmo.');
       }
-      receiver = await this.userRepository.findOneBy({ id: receiverId });
+      receiver = await this.userRepository.findOne({
+        where: { id: receiverId },
+        relations: ['roles']
+      });
       if (!receiver) {
         throw new NotFoundException(`Destinatário com ID "${receiverId}" não encontrado.`);
       }
+
+      // Validar se o destinatário é professor ou aluno
+      this.validateUserRole(receiver, 'destinatário');
+
+      // Validar se não é comunicação entre dois alunos
+      this.validateTeacherStudentCommunication(sender, receiver);
     }
 
     if (classId) {
@@ -272,5 +287,50 @@ export class MessagesService {
     }
 
     return classInstance;
+  }
+
+  /**
+   * Valida se o usuário possui role de professor ou aluno
+   */
+  private validateUserRole(user: User, userType: string): void {
+    const hasValidRole = user.roles.some(role => 
+      role.name === 'teacher' || role.name === 'student'
+    );
+
+    if (!hasValidRole) {
+      throw new ForbiddenException(
+        `Apenas professores e alunos podem enviar mensagens. O ${userType} deve ter role de 'teacher' ou 'student'.`
+      );
+    }
+  }
+
+  /**
+   * Valida se a comunicação é permitida entre os usuários
+   * Apenas professores podem enviar mensagens para alunos e vice-versa
+   */
+  private validateTeacherStudentCommunication(sender: User, receiver: User): void {
+    const senderIsTeacher = sender.roles.some(role => role.name === 'teacher');
+    const senderIsStudent = sender.roles.some(role => role.name === 'student');
+    const receiverIsTeacher = receiver.roles.some(role => role.name === 'teacher');
+    const receiverIsStudent = receiver.roles.some(role => role.name === 'student');
+
+    // Se ambos são professores, não permitir comunicação direta
+    if (senderIsTeacher && receiverIsTeacher) {
+      throw new ForbiddenException(
+        'Professores não podem enviar mensagens privadas para outros professores.'
+      );
+    }
+
+    // Se ambos são alunos, não permitir comunicação direta
+    if (senderIsStudent && receiverIsStudent) {
+      throw new ForbiddenException(
+        'Alunos não podem enviar mensagens privadas para outros alunos.'
+      );
+    }
+
+    // Comunicação professor-aluno e aluno-professor é permitida
+    if ((senderIsTeacher && receiverIsStudent) || (senderIsStudent && receiverIsTeacher)) {
+      return;
+    }
   }
 }
