@@ -6,6 +6,8 @@ import { Attendance } from './entities/attendance.entity';
 import { Repository } from 'typeorm';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { AttendanceTableRowDto } from './dto/attendance-table.dto';
+import { User } from 'src/users/entities/user.entity';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Injectable()
 export class AttendancesService {
@@ -15,18 +17,51 @@ export class AttendancesService {
     private readonly attendanceRepository: Repository<Attendance>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Class)
+    private readonly classRepository: Repository<Class>,
   ) {}
 
-  // Criar nova Frequencia e ligar ao aluno
-  async create(createAttendanceDto: CreateAttendanceDto): Promise<Attendance> {
+  private async ensureEnrollmentExists(enrollmentId: string): Promise<Enrollment> {
     const enrollment = await this.enrollmentRepository.findOne({
-      where: { id: createAttendanceDto.enrollment_id },
+      where: { id: enrollmentId },
       relations: ['student'],
     });
 
     if (!enrollment) {
-      throw new NotFoundException(`Matricula com o ID '${createAttendanceDto.enrollment_id}' nao encontrada.`);
+      throw new NotFoundException(`Matricula com o ID '${enrollmentId}' nao encontrada.`);
     }
+
+    return enrollment;
+  }
+
+  private async getAttendanceOrFail(id: string): Promise<Attendance> {
+    const attendance = await this.attendanceRepository.findOne({
+      where: { id },
+      relations: ['student', 'enrollment'],
+    });
+
+    if (!attendance) {
+      throw new NotFoundException(`Frequencia com o ID '${id}' nao encontrada.`);
+    }
+
+    return attendance;
+  }
+
+  private async ensureClassExists(classId: string): Promise<Class> {
+    const classInstance = await this.classRepository.findOne({ where: { id: classId } });
+
+    if (!classInstance) {
+      throw new NotFoundException(`Turma com o ID '${classId}' nao encontrada.`);
+    }
+
+    return classInstance;
+  }
+
+  // Criar nova Frequencia e ligar ao aluno
+  async create(createAttendanceDto: CreateAttendanceDto): Promise<Attendance> {
+    const enrollment = await this.ensureEnrollmentExists(createAttendanceDto.enrollment_id);
 
     const attendance = this.attendanceRepository.create({
       date: createAttendanceDto.date,
@@ -47,37 +82,15 @@ export class AttendancesService {
 
   // Buscar Frequencia por id
   async findOne(id: string): Promise<Attendance> {
-    const attendance = await this.attendanceRepository.findOne({
-      where: { id },
-      relations: ['student', 'enrollment'],
-    });
-
-    if (!attendance) {
-      throw new NotFoundException(`Frequencia com o ID '${id}' nao encontrada.`);
-    }
-    return attendance;
+    return this.getAttendanceOrFail(id);
   }
 
   //Atualizar Frequencia
   async update(id: string, updateAttendanceDto: UpdateAttendanceDto): Promise<Attendance> {
-    const attendance = await this.attendanceRepository.findOne({
-      where: { id },
-      relations: ['enrollment', 'student'],
-    });
-
-    if (!attendance) {
-      throw new NotFoundException(`Frequencia com o ID '${id}' nao encontrada.`);
-    }
+    const attendance = await this.getAttendanceOrFail(id);
 
     if (updateAttendanceDto.enrollment_id && updateAttendanceDto.enrollment_id !== attendance.enrollment.id) {
-      const enrollment = await this.enrollmentRepository.findOne({
-        where: { id: updateAttendanceDto.enrollment_id },
-        relations: ['student'],
-      });
-
-      if (!enrollment) {
-        throw new NotFoundException(`Matricula com o ID '${updateAttendanceDto.enrollment_id}' nao encontrada.`);
-      }
+      const enrollment = await this.ensureEnrollmentExists(updateAttendanceDto.enrollment_id);
 
       attendance.enrollment = enrollment;
       attendance.student = enrollment.student;
@@ -105,6 +118,8 @@ export class AttendancesService {
 
   // Buscar todas as frequencias de uma matricula
   async findAllByEnrollment(enrollmentId: string): Promise<Attendance[]> {
+    await this.ensureEnrollmentExists(enrollmentId);
+
     return this.attendanceRepository.find({
       where: { enrollment: { id: enrollmentId } },
       relations: ['student', 'enrollment'],
@@ -113,6 +128,8 @@ export class AttendancesService {
 
   // Buscar todas as frequencias de uma turma
   async findAllByClass(classId: string): Promise<Attendance[]> {
+    await this.ensureClassExists(classId);
+
     return this.attendanceRepository.find({
       where: { enrollment: { class: { id: classId } } },
       relations: ['student', 'enrollment'],
@@ -121,6 +138,12 @@ export class AttendancesService {
 
   // Buscar todas as frequencias por aluno
   async findAllByStudent(studentId: string): Promise<Attendance[]> {
+    const student = await this.userRepository.findOne({ where: { id: studentId } });
+
+    if (!student) {
+      throw new NotFoundException(`Aluno com o ID '${studentId}' nao encontrado.`);
+    }
+
     return this.attendanceRepository.find({
       where: { student: { id: studentId } },
       relations: ['student', 'enrollment'],
@@ -129,6 +152,8 @@ export class AttendancesService {
 
   // Montar a tabela de presencas para o front-end
   async getClassAttendanceTable(classId: string): Promise<AttendanceTableRowDto[]> {
+    await this.ensureClassExists(classId);
+
     const enrollments = await this.enrollmentRepository
       .createQueryBuilder('enrollment')
       .leftJoinAndSelect('enrollment.student', 'student')

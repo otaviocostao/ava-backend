@@ -23,12 +23,6 @@ export class AttendancesController {
     return this.attendancesService.findAll();
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Consulta um registro de frequencia pelo ID.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.attendancesService.findOne(id);
-  }
-
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza o status de presenca de um aluno.' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() updateAttendanceDto: UpdateAttendanceDto) {
@@ -69,5 +63,11 @@ export class AttendancesController {
   })
   getAttendanceTable(@Param('classId', ParseUUIDPipe) classId: string) {
     return this.attendancesService.getClassAttendanceTable(classId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Consulta um registro de frequencia pelo ID.' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.attendancesService.findOne(id);
   }
 }

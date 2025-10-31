@@ -3,6 +3,8 @@ import { AttendancesService } from './attendances.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Attendance } from './entities/attendance.entity';
 import { Enrollment } from '../enrollments/entities/enrollment.entity';
+import { User } from '../users/entities/user.entity';
+import { Class } from '../classes/entities/class.entity';
 
 describe('AttendancesService', () => {
   let service: AttendancesService;
@@ -17,6 +19,14 @@ describe('AttendancesService', () => {
         },
         {
           provide: getRepositoryToken(Enrollment),
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(Class),
           useValue: {},
         },
       ],
