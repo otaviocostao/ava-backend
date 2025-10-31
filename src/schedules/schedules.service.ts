@@ -1,79 +1,173 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import { InjectRepository } from '@nestjs/typeorm';
 import { Schedule } from './entities/schedule.entity';
-import { Repository } from 'typeorm';
 import { Class } from 'src/classes/entities/class.entity';
+import { DayOfWeek } from 'src/common/enums/day-of-week.enum';
+
+interface ConflictCheckParams {
+  classId: string;
+  dayOfWeek: DayOfWeek;
+  startTime: string;
+  endTime: string;
+  ignoreScheduleId?: string;
+}
 
 @Injectable()
 export class SchedulesService {
   constructor(
     @InjectRepository(Schedule)
     private readonly scheduleRepository: Repository<Schedule>,
-    
     @InjectRepository(Class)
     private readonly classRepository: Repository<Class>,
   ) {}
 
-  async create(createScheduleDto: CreateScheduleDto) : Promise<Schedule> {
-    const { classId } = createScheduleDto;
-
-    const classInstance = await this.classRepository.findOneBy({ id: classId });
+  private async ensureClassExists(classId: string): Promise<Class> {
+    const classInstance = await this.classRepository.findOne({ where: { id: classId } });
 
     if (!classInstance) {
-        throw new Error(`Turma com ID "${classId}" não encontrada.`);
+      throw new NotFoundException(`Turma com ID "${classId}" nao encontrada.`);
     }
 
-    const newSchedule = this.scheduleRepository.create({
-      ...createScheduleDto,
-      class: { id: classId },
-    }); 
-
-    return this.scheduleRepository.save(newSchedule);
+    return classInstance;
   }
 
-  findAll() {
-    return this.scheduleRepository.find();
-  }
-
-  async findOne(id: string) : Promise<Schedule> {
+  private async getScheduleOrFail(id: string): Promise<Schedule> {
     const schedule = await this.scheduleRepository.findOne({
       where: { id },
       relations: ['class', 'class.discipline', 'class.teacher'],
     });
 
     if (!schedule) {
-        throw new Error(`Schedule com ID "${id}" não encontrado.`);
+      throw new NotFoundException(`Horario com ID "${id}" nao encontrado.`);
     }
 
     return schedule;
   }
 
-  async update(id: string, updateScheduleDto: UpdateScheduleDto):Promise<Schedule> {
-    const schedule = await this.scheduleRepository.preload({ id, ...updateScheduleDto });
+  private toMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
 
-    if (!schedule) {
-        throw new NotFoundException(`Schedule com ID "${id}" não encontrado.`);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+      throw new BadRequestException('Horarios devem estar no formato HH:mm.');
     }
-    return await this.scheduleRepository.save(schedule);
+
+    return hours * 60 + minutes;
   }
 
-  async remove(id: string) : Promise<void> {
+  private validateTimeRange(startTime: string, endTime: string): void {
+    const startMinutes = this.toMinutes(startTime);
+    const endMinutes = this.toMinutes(endTime);
+
+    if (startMinutes >= endMinutes) {
+      throw new BadRequestException('O horario de inicio deve ser menor que o horario de termino.');
+    }
+  }
+
+  private async assertNoConflicts(params: ConflictCheckParams): Promise<void> {
+    const { classId, dayOfWeek, startTime, endTime, ignoreScheduleId } = params;
+
+    const conflictQuery = this.scheduleRepository
+      .createQueryBuilder('schedule')
+      .leftJoin('schedule.class', 'class')
+      .where('class.id = :classId', { classId })
+      .andWhere('schedule.dayOfWeek = :dayOfWeek', { dayOfWeek })
+      .andWhere('(schedule.startTime < :endTime AND schedule.endTime > :startTime)', {
+        startTime,
+        endTime,
+      });
+
+    if (ignoreScheduleId) {
+      conflictQuery.andWhere('schedule.id <> :ignoreScheduleId', { ignoreScheduleId });
+    }
+
+    const hasConflict = await conflictQuery.getOne();
+
+    if (hasConflict) {
+      throw new ConflictException('Ja existe um horario cadastrado que conflita com o intervalo informado.');
+    }
+  }
+
+  async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
+    const { classId, dayOfWeek, startTime, endTime, room } = createScheduleDto;
+
+    const classInstance = await this.ensureClassExists(classId);
+
+    this.validateTimeRange(startTime, endTime);
+
+    await this.assertNoConflicts({ classId, dayOfWeek, startTime, endTime });
+
+    const newSchedule = this.scheduleRepository.create({
+      dayOfWeek,
+      startTime,
+      endTime,
+      room,
+      class: classInstance,
+    });
+
+    return this.scheduleRepository.save(newSchedule);
+  }
+
+  async findAll(): Promise<Schedule[]> {
+    return this.scheduleRepository.find({
+      relations: ['class', 'class.discipline', 'class.teacher'],
+      order: { dayOfWeek: 'ASC', startTime: 'ASC' },
+    });
+  }
+
+  async findOne(id: string): Promise<Schedule> {
+    return this.getScheduleOrFail(id);
+  }
+
+  async update(id: string, updateScheduleDto: UpdateScheduleDto): Promise<Schedule> {
+    const schedule = await this.getScheduleOrFail(id);
+
+    const classId = updateScheduleDto.classId ?? schedule.class.id;
+    const dayOfWeek = updateScheduleDto.dayOfWeek ?? schedule.dayOfWeek;
+    const startTime = updateScheduleDto.startTime ?? schedule.startTime;
+    const endTime = updateScheduleDto.endTime ?? schedule.endTime;
+
+    if (updateScheduleDto.classId && updateScheduleDto.classId !== schedule.class.id) {
+      schedule.class = await this.ensureClassExists(updateScheduleDto.classId);
+    }
+
+    this.validateTimeRange(startTime, endTime);
+
+    await this.assertNoConflicts({
+      classId,
+      dayOfWeek,
+      startTime,
+      endTime,
+      ignoreScheduleId: id,
+    });
+
+    schedule.dayOfWeek = dayOfWeek;
+    schedule.startTime = startTime;
+    schedule.endTime = endTime;
+
+    if (updateScheduleDto.room !== undefined) {
+      schedule.room = updateScheduleDto.room;
+    }
+
+    return this.scheduleRepository.save(schedule);
+  }
+
+  async remove(id: string): Promise<void> {
     const result = await this.scheduleRepository.delete(id);
 
     if (result.affected === 0) {
-      throw new NotFoundException(`Grade horária com ID "${id}" não encontrada.`);
-    };
+      throw new NotFoundException(`Horario com ID "${id}" nao encontrado.`);
+    }
   }
 
   async findByClassId(classId: string): Promise<Schedule[]> {
-    const schedules = await this.scheduleRepository.find({ where: { class: { id: classId } } });
+    await this.ensureClassExists(classId);
 
-    if (!schedules) {
-      throw new NotFoundException(`Grade horária da turma com ID "${classId}" não encontrada.`);
-    }
-    
-    return schedules;
+    return this.scheduleRepository.find({
+      where: { class: { id: classId } },
+      order: { dayOfWeek: 'ASC', startTime: 'ASC' },
+    });
   }
 }
