@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { Payment } from './entities/payment.entity';
 import { User } from 'src/users/entities/user.entity';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { PaymentStatus } from 'src/common/enums/payment-status.enum';
 
 interface FindPaymentsQuery {
@@ -18,36 +18,48 @@ export class PaymentsService {
   constructor(
     @InjectRepository(Payment)
     private readonly paymentRepository: Repository<Payment>,
+
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
+
+  private parseDate(value: string, fieldName: string): Date {
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(`${fieldName} deve ser uma data valida (YYYY-MM-DD).`);
+    }
+
+    return parsed;
+  }
+
+  private todayIso(): string {
+    return new Date().toISOString().split('T')[0];
+  }
 
   async create(createPaymentDto: CreatePaymentDto): Promise<Payment> {
     const { studentId, amount, dueDate } = createPaymentDto;
 
     const student = await this.userRepository.findOneBy({ id: studentId });
     if (!student) {
-      throw new NotFoundException(`Aluno com ID "${studentId}" não encontrado.`);
+      throw new NotFoundException(`Aluno com ID "${studentId}" nao encontrado.`);
     }
 
-    const newPayment = this.paymentRepository.create({
+    const dueDateValue = this.parseDate(dueDate, 'dueDate');
+
+    const payment = this.paymentRepository.create({
       student,
       amount,
-      dueDate,
+      dueDate: dueDateValue,
       status: PaymentStatus.PENDING,
     });
 
-    return this.paymentRepository.save(newPayment);
-  }
-
-  findAllByStudent(studentId: string): Promise<Payment[]> {
-    return this.paymentRepository.find({
-      where: { student: { id: studentId } },
-      order: { dueDate: 'DESC' },
-    });
+    return this.paymentRepository.save(payment);
   }
 
   async findAll(query: FindPaymentsQuery): Promise<Payment[]> {
+    await this.updateOverduePayments();
+
     const qb = this.paymentRepository
       .createQueryBuilder('payment')
       .leftJoinAndSelect('payment.student', 'student')
@@ -57,73 +69,73 @@ export class PaymentsService {
       qb.andWhere('payment.status = :status', { status: query.status });
     }
 
+    let startDate: Date | undefined;
     if (query.dueDateStart) {
-      const start = new Date(query.dueDateStart);
-      if (Number.isNaN(start.getTime())) {
-        throw new BadRequestException('dueDateStart deve ser uma data valida (YYYY-MM-DD).');
-      }
-      qb.andWhere('payment.dueDate >= :dueDateStart', {
-        dueDateStart: query.dueDateStart,
-      });
+      startDate = this.parseDate(query.dueDateStart, 'dueDateStart');
+      qb.andWhere('payment.dueDate >= :dueDateStart', { dueDateStart: query.dueDateStart });
     }
 
+    let endDate: Date | undefined;
     if (query.dueDateEnd) {
-      const end = new Date(query.dueDateEnd);
-      if (Number.isNaN(end.getTime())) {
-        throw new BadRequestException('dueDateEnd deve ser uma data valida (YYYY-MM-DD).');
-      }
-      qb.andWhere('payment.dueDate <= :dueDateEnd', {
-        dueDateEnd: query.dueDateEnd,
-      });
+      endDate = this.parseDate(query.dueDateEnd, 'dueDateEnd');
+      qb.andWhere('payment.dueDate <= :dueDateEnd', { dueDateEnd: query.dueDateEnd });
     }
 
-    if (query.dueDateStart && query.dueDateEnd) {
-      if (new Date(query.dueDateStart) > new Date(query.dueDateEnd)) {
-        throw new BadRequestException('dueDateStart deve ser anterior ou igual a dueDateEnd.');
-      }
+    if (startDate && endDate && startDate > endDate) {
+      throw new BadRequestException('dueDateStart deve ser anterior ou igual a dueDateEnd.');
     }
 
     return qb.getMany();
   }
 
+  async findAllByStudent(studentId: string): Promise<Payment[]> {
+    await this.updateOverduePayments();
+
+    return this.paymentRepository.find({
+      where: { student: { id: studentId } },
+      order: { dueDate: 'DESC' },
+    });
+  }
+
   async findOne(id: string): Promise<Payment> {
+    await this.updateOverduePayments();
+
     const payment = await this.paymentRepository.findOne({
       where: { id },
       relations: ['student'],
     });
 
     if (!payment) {
-      throw new NotFoundException(`Pagamento com ID "${id}" não encontrado.`);
+      throw new NotFoundException(`Pagamento com ID "${id}" nao encontrado.`);
     }
+
     return payment;
   }
-
 
   async update(id: string, updatePaymentDto: UpdatePaymentDto): Promise<Payment> {
     const payment = await this.findOne(id);
 
-    const { status } = updatePaymentDto;
+    payment.status = updatePaymentDto.status;
 
-    payment.status = status;
-
-    if (status === PaymentStatus.PAID && !payment.paidAt) {
+    if (updatePaymentDto.status === PaymentStatus.PAID) {
       payment.paidAt = new Date();
-    } else if (status !== PaymentStatus.PAID) {
+    } else {
       payment.paidAt = null;
     }
 
     return this.paymentRepository.save(payment);
   }
-  
+
   async remove(id: string): Promise<void> {
     const result = await this.paymentRepository.delete(id);
+
     if (result.affected === 0) {
-      throw new NotFoundException(`Pagamento com ID "${id}" não encontrado.`);
+      throw new NotFoundException(`Pagamento com ID "${id}" nao encontrado.`);
     }
   }
 
   async updateOverduePayments(): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.todayIso();
 
     await this.paymentRepository
       .createQueryBuilder()

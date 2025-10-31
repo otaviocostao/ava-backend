@@ -1,24 +1,15 @@
-import { IsNumber, IsDate, IsEnum, IsOptional, IsDecimal, IsString, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentStatus } from '../../common/enums/payment-status.enum';
+import { IsDateString, IsNumber, IsPositive, IsUUID } from 'class-validator';
 
 export class CreatePaymentDto {
-  @IsUUID(4, {message: "O ID do estudante deve ser um UUID válido"})
+  @IsUUID('4', { message: 'O ID do estudante deve ser um UUID valido.' })
   studentId: string;
 
-  @IsDecimal({ decimal_digits: '2' })
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'O valor deve ter no maximo duas casas decimais.' })
+  @IsPositive({ message: 'O valor deve ser positivo.' })
   amount: number;
 
-  @IsDate()
-  @Type(() => Date)
-  dueDate: Date;
-
-  @IsOptional()
-  @IsDate()
-  @Type(() => Date)
-  paidAt?: Date;
-
-  @IsOptional()
-  @IsEnum(PaymentStatus)
-  status?: PaymentStatus;
+  @IsDateString({}, { message: 'A data de vencimento deve estar no formato YYYY-MM-DD.' })
+  dueDate: string;
 }
