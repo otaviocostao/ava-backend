@@ -3,9 +3,13 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { AppContextService } from './app-context.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  const appContextService = app.get(AppContextService);
+  appContextService.setApp(app);
 
   app.enableCors({
     origin: '*',

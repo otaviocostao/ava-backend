@@ -1,4 +1,4 @@
-# Sistema de Gestão Acadêmica (AVA e SGE Backend)
+ # Sistema de Gestão Acadêmica (AVA e SGE Backend)
 
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
