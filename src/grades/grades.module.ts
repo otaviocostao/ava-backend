@@ -1,3 +1,4 @@
+import { Attendance } from '../attendances/entities/attendance.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Activity } from '../activities/entities/activity.entity';
@@ -12,7 +13,7 @@ import { GradesService } from './grades.service';
 import { StudentGradesController } from './student-grades.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Grade, Enrollment, Activity, Class, User])],
+  imports: [TypeOrmModule.forFeature([Grade, Enrollment, Activity, Class, User, Attendance])],
   controllers: [GradesController, ActivityGradesController, StudentGradesController, ClassGradebookController],
   providers: [GradesService],
 })

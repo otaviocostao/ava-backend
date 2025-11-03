@@ -45,6 +45,12 @@ export class GradesController {
     return this.gradesService.findAll(query);
   }
 
+  @Get('students/:studentId/grades-detailed')
+  @ApiOperation({ summary: 'Retorna boletim detalhado por disciplina com média, frequência, situação e notas por bimestre.' })
+  getStudentGradesDetailed(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.gradesService.getStudentGradesDetailed(studentId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Recupera uma nota específica pelo ID.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {

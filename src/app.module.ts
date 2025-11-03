@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AppContextService } from './app-context.service';
+import { StudentsModule } from './students/students.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { CoursesModule } from './courses/courses.module';
@@ -80,7 +81,7 @@ import { NoticeBoardModule } from './notice-board/notice-board.module';
         };
       },
     }),
-    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule
+    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule
   ],
   controllers: [AppController],
   providers: [AppService, AppContextService, LiveClassGateway],

@@ -1,3 +1,4 @@
+import { Attendance } from '../attendances/entities/attendance.entity';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -119,6 +120,33 @@ export interface ClassGradebook {
   entries: ClassGradebookEntry[];
 }
 
+export interface DetailedGradeByDiscipline {
+  enrollmentId: string;
+  class: {
+    id: string;
+    code: string;
+    semester: string;
+    year: number;
+    disciplineName: string;
+  };
+  average: number;
+  attendancePercentage: number;
+  status: 'approved' | 'reproved' | 'in_progress';
+  gradesByPeriod: {
+    period: string;
+    activities: StudentActivityGrade[];
+  }[];
+}
+
+export interface DetailedStudentGrades {
+  student: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  disciplines: DetailedGradeByDiscipline[];
+}
+
 @Injectable()
 export class GradesService {
   constructor(
@@ -132,6 +160,8 @@ export class GradesService {
     private readonly classRepository: Repository<Class>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Attendance)
+    private readonly attendanceRepository: Repository<Attendance>,
   ) {}
 
   async create(createGradeDto: CreateGradeDto): Promise<Grade> {
@@ -423,7 +453,7 @@ export class GradesService {
       (enrollment) => enrollment.id,
     );
 
-    const grades = enrollmentIds.length
+    const grades: Grade[] = enrollmentIds.length
       ? await this.gradesRepository.find({
           where: { enrollment: { id: In(enrollmentIds) } },
           relations: ['enrollment'],
@@ -509,6 +539,164 @@ export class GradesService {
       })),
       entries,
     };
+  }
+
+  async getStudentGradesDetailed(studentId: string): Promise<DetailedStudentGrades> {
+    const student = await this.userRepository.findOne({
+      where: { id: studentId },
+    });
+
+    if (!student) {
+      throw new NotFoundException(
+        `Estudante com o ID '${studentId}' nao encontrado.`,
+      );
+    }
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['class', 'class.discipline', 'class.activities'],
+    });
+
+    const enrollmentIds = enrollments.map((enrollment) => enrollment.id);
+
+    const [grades, attendances] = await Promise.all([
+      enrollmentIds.length
+        ? this.gradesRepository.find({
+            where: { enrollment: { id: In(enrollmentIds) } },
+            relations: ['enrollment'],
+          })
+        : [] as Grade[],
+      enrollmentIds.length
+        ? this.attendanceRepository.find({
+            where: { enrollment: { id: In(enrollmentIds) } },
+            relations: ['enrollment'],
+          })
+        : [] as Attendance[],
+    ]);
+
+    const gradeByEnrollmentAndActivity = new Map<string, Grade>();
+    grades.forEach((grade) => {
+      gradeByEnrollmentAndActivity.set(
+        `${grade.enrollment.id}:${grade.activityId}`,
+        grade,
+      );
+    });
+
+    const attendanceByEnrollment = new Map<string, Attendance[]>();
+    attendances.forEach((attendance) => {
+      const enrollmentId = attendance.enrollment.id;
+      if (!attendanceByEnrollment.has(enrollmentId)) {
+        attendanceByEnrollment.set(enrollmentId, []);
+      }
+      attendanceByEnrollment.get(enrollmentId)!.push(attendance);
+    });
+
+    const MIN_APPROVAL_SCORE = 6.0;
+    const MIN_ATTENDANCE_PERCENTAGE = 75;
+
+    const disciplines: DetailedGradeByDiscipline[] = enrollments.map((enrollment) => {
+      const clazz = enrollment.class;
+      const enrollmentGrades = grades.filter((g) => g.enrollment.id === enrollment.id);
+      const enrollmentAttendances = attendanceByEnrollment.get(enrollment.id) || [];
+
+      const average =
+        enrollmentGrades.length > 0
+          ? enrollmentGrades.reduce((sum, g) => sum + Number(g.score), 0) / enrollmentGrades.length
+          : 0;
+
+      const totalAttendance = enrollmentAttendances.length;
+      const presentCount = enrollmentAttendances.filter((a) => a.present).length;
+      const attendancePercentage =
+        totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 0;
+
+      let status: 'approved' | 'reproved' | 'in_progress';
+      if (average >= MIN_APPROVAL_SCORE && attendancePercentage >= MIN_ATTENDANCE_PERCENTAGE) {
+        status = 'approved';
+      } else if (
+        enrollmentGrades.length > 0 &&
+        (average < MIN_APPROVAL_SCORE || attendancePercentage < MIN_ATTENDANCE_PERCENTAGE)
+      ) {
+        status = 'reproved';
+      } else {
+        status = 'in_progress';
+      }
+
+      const activities = (clazz.activities ?? []).sort((a, b) => {
+        const aTime = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+      });
+
+      const gradesByPeriod: {
+        period: string;
+        activities: StudentActivityGrade[];
+      }[] = [];
+
+      activities.forEach((activity) => {
+        const grade = gradeByEnrollmentAndActivity.get(
+          `${enrollment.id}:${activity.id}`,
+        );
+
+        const activityEntry: StudentActivityGrade = {
+          id: activity.id,
+          title: activity.title,
+          description: activity.description,
+          type: activity.type,
+          due_date: activity.due_date ?? null,
+          max_score: activity.max_score ?? null,
+          grade: grade
+            ? {
+                id: grade.id,
+                score: grade.score,
+                gradedAt: grade.gradedAt ?? null,
+              }
+            : null,
+        };
+
+        const period = activity.due_date
+          ? this.getPeriodFromDate(new Date(activity.due_date))
+          : 'Sem período';
+
+        let periodEntry = gradesByPeriod.find((p) => p.period === period);
+        if (!periodEntry) {
+          periodEntry = { period, activities: [] };
+          gradesByPeriod.push(periodEntry);
+        }
+        periodEntry.activities.push(activityEntry);
+      });
+
+      return {
+        enrollmentId: enrollment.id,
+        class: {
+          id: clazz.id,
+          code: clazz.code,
+          semester: clazz.semester,
+          year: clazz.year,
+          disciplineName: clazz.discipline?.name || '',
+        },
+        average: Math.round(average * 100) / 100,
+        attendancePercentage: Math.round(attendancePercentage * 100) / 100,
+        status,
+        gradesByPeriod,
+      };
+    });
+
+    return {
+      student: {
+        id: student.id,
+        name: student.name,
+        email: student.email,
+      },
+      disciplines,
+    };
+  }
+
+  private getPeriodFromDate(date: Date): string {
+    const month = date.getMonth() + 1;
+    if (month >= 1 && month <= 3) return 'Bimestre 1';
+    if (month >= 4 && month <= 6) return 'Bimestre 2';
+    if (month >= 7 && month <= 9) return 'Bimestre 3';
+    return 'Bimestre 4';
   }
 
   private async findEnrollment(enrollmentId: string): Promise<Enrollment> {

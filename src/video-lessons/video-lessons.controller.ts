@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, HttpCode, HttpStatus, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { VideoLessonsService } from './video-lessons.service';
 import { CreateVideoLessonDto } from './dto/create-video-lesson.dto';
 import { UpdateVideoLessonDto } from './dto/update-video-lesson.dto';
+import { MarkVideoWatchedDto } from './dto/mark-video-watched.dto';
 
 @ApiTags('Video Lessons')
 @Controller('video-lessons')
@@ -46,6 +47,20 @@ export class VideoLessonsController {
       id,
       updateVideoLessonDto,
       requestingUserId,
+    );
+  }
+
+  @Patch(':id/watched')
+  @ApiOperation({ summary: 'Marca vídeo como assistido por um estudante.' })
+  markAsWatched(
+    @Param('id', ParseUUIDPipe) videoLessonId: string,
+    @Body() markVideoWatchedDto: MarkVideoWatchedDto,
+    @Query('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.videoLessonsService.markAsWatched(
+      videoLessonId,
+      studentId,
+      markVideoWatchedDto.watchedPercentage || 100,
     );
   }
 

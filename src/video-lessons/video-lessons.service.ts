@@ -4,18 +4,24 @@ import { Repository } from 'typeorm';
 import { CreateVideoLessonDto } from './dto/create-video-lesson.dto';
 import { UpdateVideoLessonDto } from './dto/update-video-lesson.dto';
 import { VideoLesson } from './entities/video-lesson.entity';
+import { VideoLessonWatch } from './entities/video-lesson-watch.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class VideoLessonsService {
   constructor(
     @InjectRepository(VideoLesson)
     private videoLessonRepository: Repository<VideoLesson>,
+    @InjectRepository(VideoLessonWatch)
+    private videoLessonWatchRepository: Repository<VideoLessonWatch>,
     @InjectRepository(Class)
     private readonly classRepository: Repository<Class>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async create(
@@ -112,6 +118,47 @@ export class VideoLessonsService {
     }
 
     await this.videoLessonRepository.remove(videoLesson);
+  }
+
+  async markAsWatched(
+    videoLessonId: string,
+    studentId: string,
+    watchedPercentage: number = 100,
+  ): Promise<VideoLessonWatch> {
+    const [videoLesson, student] = await Promise.all([
+      this.videoLessonRepository.findOne({ where: { id: videoLessonId } }),
+      this.userRepository.findOne({ where: { id: studentId } }),
+    ]);
+
+    if (!videoLesson) {
+      throw new NotFoundException(`Videoaula com ID "${videoLessonId}" não encontrada.`);
+    }
+
+    if (!student) {
+      throw new NotFoundException(`Estudante com ID "${studentId}" não encontrado.`);
+    }
+
+    await this.ensureUserCanViewClassContent(videoLesson.class.id, studentId);
+
+    const clampedPercentage = Math.max(0, Math.min(100, watchedPercentage));
+
+    const existingWatch = await this.videoLessonWatchRepository.findOne({
+      where: { videoLesson: { id: videoLessonId }, student: { id: studentId } },
+    });
+
+    if (existingWatch) {
+      existingWatch.watchedPercentage = clampedPercentage;
+      existingWatch.watchedAt = new Date();
+      return this.videoLessonWatchRepository.save(existingWatch);
+    }
+
+    const watch = this.videoLessonWatchRepository.create({
+      videoLesson,
+      student,
+      watchedPercentage: clampedPercentage,
+    });
+
+    return this.videoLessonWatchRepository.save(watch);
   }
 
   // Método para verificar se o Usuario pertence a Classe da Videoaula
