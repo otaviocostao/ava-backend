@@ -32,7 +32,7 @@ export class ActivitiesController {
 
   @Get('class/:classId')
   @ApiOperation({ summary: 'Lista todas as atividades de uma turma específica.' })
-  findByClassId(@Param('classId') classId: string) {
+  findByClassId(@Param('classId', ParseUUIDPipe) classId: string) {
     return this.activitiesService.findByClassId(classId);
   }
 
@@ -62,19 +62,22 @@ export class ActivitiesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Recupera os detalhes de uma atividade específica.' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.activitiesService.findOne(id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza parcialmente uma atividade existente.' })
-  update(@Param('id') id: string, @Body() updateActivityDto: UpdateActivityDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateActivityDto: UpdateActivityDto,
+  ) {
     return this.activitiesService.update(id, updateActivityDto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Remove uma atividade do sistema.' })
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.activitiesService.remove(id);
   }
 }

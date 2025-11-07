@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +12,8 @@ import { ActivitySubmissionStatus } from '../common/enums/activity-submission-st
 
 @Injectable()
 export class ActivitiesService {
+  private readonly activityRelations = ['class', 'class.discipline', 'class.teacher'];
+
   constructor(
     @InjectRepository(Activity)
     private readonly activityRepository: Repository<Activity>,
@@ -28,15 +30,7 @@ export class ActivitiesService {
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
     const { classId, ...rest } = createActivityDto;
 
-    const classEntity = await this.classRepository.findOne({
-      where: { id: classId },
-    });
-
-    if (!classEntity) {
-      throw new NotFoundException(
-        `Turma com ID "${classId}" nao encontrada.`,
-      );
-    }
+    const classEntity = await this.findClassOrThrowException(classId);
 
     const activity = this.activityRepository.create({
       ...rest,
@@ -47,13 +41,16 @@ export class ActivitiesService {
   }
 
   async findAll(): Promise<Activity[]> {
-    return this.activityRepository.find();
+    return this.activityRepository.find({
+      relations: this.activityRelations,
+      order: { dueDate: 'ASC' },
+    });
   }
 
   async findOne(id: string): Promise<Activity> {
     const activity = await this.activityRepository.findOne({
       where: { id },
-      relations: ['class'],
+      relations: this.activityRelations,
     });
     if (!activity) {
       throw new NotFoundException(`Activity with ID "${id}" not found`);
@@ -70,16 +67,7 @@ export class ActivitiesService {
     };
 
     if (classId !== undefined) {
-      const classEntity = await this.classRepository.findOne({
-        where: { id: classId },
-      });
-
-      if (!classEntity) {
-        throw new NotFoundException(
-          `Turma com ID "${classId}" nao encontrada.`,
-        );
-      }
-
+      const classEntity = await this.findClassOrThrowException(classId);
       preloadData.class = classEntity;
     }
 
@@ -96,13 +84,13 @@ export class ActivitiesService {
   }
 
   async findByClassId(classId: string): Promise<Activity[]> {
-    const activities = await this.activityRepository.find({ where: { class: { id: classId } } });
+    await this.findClassOrThrowException(classId);
 
-    if (activities.length === 0) {
-      return [];
-    }
-    
-    return activities;
+    return this.activityRepository.find({
+      where: { class: { id: classId } },
+      relations: this.activityRelations,
+      order: { dueDate: 'ASC' },
+    });
   }
 
   async findByStudentId(studentId: string): Promise<Activity[]> {
@@ -123,7 +111,8 @@ export class ActivitiesService {
 
     return this.activityRepository.find({
       where: { class: { id: In(classIds) } },
-      relations: ['class', 'class.discipline'],
+      relations: this.activityRelations,
+      order: { dueDate: 'ASC' },
     });
   }
 
@@ -215,5 +204,17 @@ export class ActivitiesService {
     });
 
     return this.activitySubmissionRepository.save(submission);
+  }
+
+  private async findClassOrThrowException(classId: string): Promise<Class> {
+    const classEntity = await this.classRepository.findOne({
+      where: { id: classId },
+    });
+
+    if (!classEntity) {
+      throw new NotFoundException(`Turma com ID "${classId}" nao encontrada.`);
+    }
+
+    return classEntity;
   }
 }
