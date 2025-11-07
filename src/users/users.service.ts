@@ -5,8 +5,9 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-// Removido ResponseUserDto em favor de retorno direto da entidade sem o campo de senha
 import { Role } from 'src/roles/entities/role.entity';
+import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
+import { GradebookEntryDto } from './dto/gradebook-entry.dto';
 
 
 @Injectable()
@@ -16,7 +17,9 @@ export class UsersService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(Role)
-    private readonly roleRepository: Repository<Role>
+    private readonly roleRepository: Repository<Role>,
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -113,4 +116,58 @@ export class UsersService {
 
     return this.userRepository.save(user);
   }
-}
+
+  async getStudentGradebook(studentId: string): Promise<GradebookEntryDto[]> {
+    const student = await this.userRepository.findOneBy({ id: studentId });
+    if (!student) {
+      throw new NotFoundException(`Aluno com ID "${studentId}" não encontrado.`);
+    }
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: [
+        'class',
+        'class.discipline',
+        'class.teacher',
+        'grades',
+        'grades.activity',
+      ],
+    });
+
+    if (!enrollments.length) {
+      return [];
+    }
+
+    const gradebook = enrollments.map((enrollment) => {
+      const grades = enrollment.grades.map((grade) => ({
+        activityTitle: grade.activity.title,
+        activityType: grade.activity.type,
+        dueDate: grade.activity.dueDate,
+        score: grade.score !== null ? parseFloat(grade.score as any) : null,
+        maxScore: grade.activity.maxScore !== null ? parseFloat(grade.activity.maxScore as any) : null,
+      }));
+      
+
+      const gradebookEntry: GradebookEntryDto = {
+        classId: enrollment.class.id,
+        className: enrollment.class.discipline.name,
+        classCode: enrollment.class.code,
+        teacherName: enrollment.class.teacher ? enrollment.class.teacher.name : 'Não definido',
+        grades: grades,
+      };
+
+      return gradebookEntry;
+    });
+
+    return gradebook;
+  }
+  
+  private calculateFinalGrade(grades: { score: number | null; maxScore: number | null }[]): number | null {
+      const validGrades = grades.filter(g => g.score !== null && g.maxScore !== null && g.maxScore > 0);
+      if (validGrades.length === 0) {
+          return null;
+      }
+      const totalScore = validGrades.reduce((sum, g) => sum + (g.score! / g.maxScore!) * 10, 0);
+      return parseFloat((totalScore / validGrades.length).toFixed(2));
+  }
+}  

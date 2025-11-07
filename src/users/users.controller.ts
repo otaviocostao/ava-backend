@@ -72,5 +72,12 @@ export class UsersController {
   ) {
     return this.usersService.removeRoleFromUser(userId, roleId);
   }
-
+  
+  @Get(':studentId/gradebook')
+  @ApiOperation({ summary: 'Lista o boletim com todas as notas do usuario (estudante).' })
+  getStudentGradebook(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.usersService.getStudentGradebook(studentId);
+  }
 }
