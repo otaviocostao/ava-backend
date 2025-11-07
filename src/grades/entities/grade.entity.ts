@@ -1,9 +1,10 @@
+import { Activity } from 'src/activities/entities/activity.entity';
 import { ColumnNumericTransformer } from '../../common/transformers/column-numeric.transformer';
 import { Enrollment } from '../../enrollments/entities/enrollment.entity';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 @Entity('grades')
-@Unique(['enrollment', 'activityId'])
+@Unique(['enrollment', 'activity'])
 export class Grade {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -12,8 +13,9 @@ export class Grade {
   @JoinColumn({ name: 'enrollment_id' })
   enrollment: Enrollment;
 
-  @Column({ name: 'activity_id', type: 'uuid' })
-  activityId: string;
+  @ManyToOne(() => Activity, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'activity_id' })
+  activity: Activity;
 
   @Column({
     type: 'decimal',
