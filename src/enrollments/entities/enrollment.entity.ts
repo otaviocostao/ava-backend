@@ -1,5 +1,6 @@
 import { Attendance } from "src/attendances/entities/attendance.entity";
 import { Class } from "src/classes/entities/class.entity";
+import { Grade } from "src/grades/entities/grade.entity";
 import { User } from "src/users/entities/user.entity";
 import { CreateDateColumn, Entity, JoinColumn, ManyToMany, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
 
@@ -24,4 +25,7 @@ export class Enrollment {
 
   @OneToMany(() => Attendance, (attendance) => attendance.enrollment)
   attendances: Attendance[];
+
+  @OneToMany(() => Grade, (grade) => grade.enrollment)
+  grades: Grade[];
 }
