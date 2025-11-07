@@ -3,7 +3,7 @@ import { ActivityType } from '../../common/enums/activity-type.enum';
 
 export class CreateActivityDto {
   @IsUUID()
-  class_id: string;
+  classId: string;
 
   @IsString()
   title: string;
@@ -17,9 +17,9 @@ export class CreateActivityDto {
 
   @IsOptional()
   @IsDateString()
-  due_date?: Date;
+  dueDate?: Date;
 
   @IsOptional()
   @IsNumber()
-  max_score?: number;
+  maxScore?: number;
 }

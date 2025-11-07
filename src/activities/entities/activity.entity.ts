@@ -26,7 +26,7 @@ export class Activity {
   type: ActivityType;
 
   @Column({ type: 'date', nullable: true })
-  due_date: Date;
+  dueDate: Date;
 
   @Column('decimal', {
     precision: 5,
@@ -34,5 +34,5 @@ export class Activity {
     nullable: true,
     transformer: new ColumnNumericTransformer(),
   })
-  max_score: number;
+  maxScore: number;
 }
