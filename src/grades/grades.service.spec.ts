@@ -7,6 +7,7 @@ import { Enrollment } from '../enrollments/entities/enrollment.entity';
 import { User } from '../users/entities/user.entity';
 import { Grade } from './entities/grade.entity';
 import { GradesService } from './grades.service';
+import { Attendance } from 'src/attendances/entities/attendance.entity';
 
 const createGradesRepositoryMock = () => ({
   findOne: jest.fn(),
@@ -23,6 +24,7 @@ const createEnrollmentRepositoryMock = () => ({
 
 const createActivityRepositoryMock = () => ({
   findOne: jest.fn(),
+  findOneBy: jest.fn(),
 });
 
 const createClassRepositoryMock = () => ({
@@ -33,6 +35,10 @@ const createUserRepositoryMock = () => ({
   findOne: jest.fn(),
 });
 
+const createAttendanceRepositoryMock = () => ({
+  find: jest.fn(),
+});
+
 describe('GradesService', () => {
   let service: GradesService;
   let gradesRepositoryMock: ReturnType<typeof createGradesRepositoryMock>;
@@ -40,6 +46,7 @@ describe('GradesService', () => {
   let activityRepositoryMock: ReturnType<typeof createActivityRepositoryMock>;
   let classRepositoryMock: ReturnType<typeof createClassRepositoryMock>;
   let userRepositoryMock: ReturnType<typeof createUserRepositoryMock>;
+  let attendanceRepositoryMock: ReturnType<typeof createAttendanceRepositoryMock>;
 
   beforeEach(async () => {
     gradesRepositoryMock = createGradesRepositoryMock();
@@ -47,6 +54,7 @@ describe('GradesService', () => {
     activityRepositoryMock = createActivityRepositoryMock();
     classRepositoryMock = createClassRepositoryMock();
     userRepositoryMock = createUserRepositoryMock();
+    attendanceRepositoryMock = createAttendanceRepositoryMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,6 +79,10 @@ describe('GradesService', () => {
           provide: getRepositoryToken(User),
           useValue: userRepositoryMock,
         },
+        {
+          provide: getRepositoryToken(Attendance),
+          useValue: attendanceRepositoryMock,
+        },
       ],
     }).compile();
 
@@ -94,9 +106,11 @@ describe('GradesService', () => {
         gradedAt: '2025-01-01T00:00:00.000Z',
       };
       const enrollment = { id: dto.enrollmentId } as Enrollment;
+      const activity = { id: dto.activityId } as Activity;
       const created = { id: 'grade-id', ...dto, enrollment } as unknown as Grade;
 
       enrollmentRepositoryMock.findOneBy.mockResolvedValue(enrollment);
+      activityRepositoryMock.findOneBy.mockResolvedValue(activity);
       gradesRepositoryMock.findOne.mockResolvedValue(null);
       gradesRepositoryMock.create.mockReturnValue(created);
       gradesRepositoryMock.save.mockResolvedValue(created);
@@ -106,7 +120,7 @@ describe('GradesService', () => {
       expect(gradesRepositoryMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           enrollment,
-          activityId: dto.activityId,
+          activity: { id: dto.activityId },
           score: dto.score,
           gradedAt: expect.any(Date),
         }),
@@ -135,11 +149,19 @@ describe('GradesService', () => {
         score: 70,
       };
       const enrollment = { id: dto.enrollmentId } as Enrollment;
+      const activity = { id: dto.activityId } as Activity;
 
       enrollmentRepositoryMock.findOneBy.mockResolvedValue(enrollment);
+      activityRepositoryMock.findOneBy.mockResolvedValue(activity);
       gradesRepositoryMock.findOne.mockResolvedValue({ id: 'existing-grade' } as Grade);
 
       await expect(service.create(dto)).rejects.toBeInstanceOf(ConflictException);
+      expect(gradesRepositoryMock.findOne).toHaveBeenCalledWith({
+        where: {
+          enrollment: { id: enrollment.id },
+          activity: { id: activity.id },
+        },
+      });
     });
   });
 
@@ -156,9 +178,9 @@ describe('GradesService', () => {
       expect(gradesRepositoryMock.find).toHaveBeenCalledWith({
         where: {
           enrollment: { id: 'enrollment-id' },
-          activityId: 'activity-id',
+          activity: { id: 'activity-id' },
         },
-        relations: ['enrollment'],
+        relations: ['enrollment', 'activity'],
       });
       expect(result).toEqual(grades);
     });
@@ -173,7 +195,7 @@ describe('GradesService', () => {
 
       expect(gradesRepositoryMock.findOne).toHaveBeenCalledWith({
         where: { id: 'grade-id' },
-        relations: ['enrollment'],
+        relations: ['enrollment', 'activity'],
       });
       expect(result).toEqual(grade);
     });
@@ -194,8 +216,8 @@ describe('GradesService', () => {
         title: 'Prova 1',
         description: 'Primeira prova',
         type: 'exam',
-        due_date: new Date('2025-02-01'),
-        max_score: 100,
+        dueDate: '2025-02-01',
+        maxScore: 100,
         class: { id: 'class-id' },
       } as unknown as Activity;
       activityRepositoryMock.findOne.mockResolvedValue(activity);
@@ -216,24 +238,16 @@ describe('GradesService', () => {
         id: 'grade-1',
         enrollment: enrollments[0],
         score: 98.5,
-        activityId: 'activity-id',
+        activity: { id: 'activity-id' }, 
         gradedAt: new Date('2025-02-02'),
       } as Grade;
       gradesRepositoryMock.find.mockResolvedValue([grade]);
 
       const result = await service.getActivityGradebook('activity-id');
 
-      expect(activityRepositoryMock.findOne).toHaveBeenCalledWith({
-        where: { id: 'activity-id' },
-        relations: ['class'],
-      });
-      expect(enrollmentRepositoryMock.find).toHaveBeenCalledWith({
-        where: { class: { id: 'class-id' } },
-        relations: ['student'],
-      });
       expect(gradesRepositoryMock.find).toHaveBeenCalledWith({
-        where: { activityId: 'activity-id' },
-        relations: ['enrollment', 'enrollment.student'],
+        where: { activity: { id: 'activity-id' } }, 
+        relations: ['enrollment'], 
       });
       expect(result).toEqual({
         activity: {
@@ -241,8 +255,8 @@ describe('GradesService', () => {
           title: activity.title,
           description: activity.description,
           type: activity.type,
-          due_date: activity.due_date,
-          max_score: activity.max_score,
+          due_date: new Date(activity.dueDate),
+          max_score: activity.maxScore,
           classId: 'class-id',
         },
         entries: [
@@ -265,11 +279,17 @@ describe('GradesService', () => {
     });
 
     it('lanca NotFoundException quando a atividade nao existe', async () => {
-      activityRepositoryMock.findOne.mockResolvedValue(null);
+      const dto = {
+        enrollmentId: 'enrollment-id',
+        activityId: 'missing-activity',
+        score: 80,
+      };
+      const enrollment = { id: dto.enrollmentId } as Enrollment;
 
-      await expect(service.getActivityGradebook('missing-activity')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      enrollmentRepositoryMock.findOneBy.mockResolvedValue(enrollment);
+      activityRepositoryMock.findOneBy.mockResolvedValue(null);
+
+      await expect(service.create(dto)).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('lanca NotFoundException quando a atividade nao esta associada a uma turma', async () => {
@@ -289,10 +309,9 @@ describe('GradesService', () => {
     it('atualiza a pontuacao da nota com sucesso', async () => {
       const grade = {
         id: 'grade-id',
-        activityId: 'activity-id',
+        activity: { id: 'activity-id' },
         enrollment: { id: 'enrollment-id' },
         score: 75,
-        gradedAt: new Date(),
       } as unknown as Grade;
       const updated = { ...grade, score: 90 } as Grade;
 
@@ -302,7 +321,7 @@ describe('GradesService', () => {
       const result = await service.update('grade-id', { score: 90 });
 
       expect(gradesRepositoryMock.save).toHaveBeenCalledWith(
-        expect.objectContaining({ score: 90 }),
+        expect.objectContaining({ id: 'grade-id', score: 90 }),
       );
       expect(result).toEqual(updated);
     });
@@ -349,37 +368,43 @@ describe('GradesService', () => {
     it('lanca ConflictException ao tentar atualizar para uma atividade duplicada', async () => {
       const grade = {
         id: 'grade-id',
-        activityId: 'activity-id',
+        activity: { id: 'old-activity-id' },
         enrollment: { id: 'enrollment-id' },
-        score: 75,
       } as unknown as Grade;
 
+      const newActivity = { id: 'new-activity-id' } as Activity;
+
       jest.spyOn(service, 'findOne').mockResolvedValue(grade);
-      gradesRepositoryMock.findOne.mockResolvedValue({
-        id: 'other-grade',
-        activityId: 'new-activity',
-      } as Grade);
+      activityRepositoryMock.findOneBy.mockResolvedValue(newActivity);
+      gradesRepositoryMock.findOne.mockResolvedValue({ id: 'other-grade' } as Grade); 
 
       await expect(
-        service.update('grade-id', { activityId: 'new-activity' }),
+        service.update('grade-id', { activityId: 'new-activity-id' }),
       ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(gradesRepositoryMock.findOne).toHaveBeenCalledWith({
+        where: {
+          enrollment: { id: 'enrollment-id' },
+          activity: { id: 'new-activity-id' },
+        },
+      });
     });
-  });
-
-  describe('remove', () => {
-    it('remove uma nota com sucesso', async () => {
-      gradesRepositoryMock.delete.mockResolvedValue({ affected: 1 });
-
-      await expect(service.remove('grade-id')).resolves.toBeUndefined();
-      expect(gradesRepositoryMock.delete).toHaveBeenCalledWith('grade-id');
-    });
-
-    it('lanca NotFoundException quando a nota nao existe', async () => {
-      gradesRepositoryMock.delete.mockResolvedValue({ affected: 0 });
-
-      await expect(service.remove('missing-grade')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+    
+    describe('remove', () => {
+      it('remove uma nota com sucesso', async () => {
+        gradesRepositoryMock.delete.mockResolvedValue({ affected: 1 });
+  
+        await expect(service.remove('grade-id')).resolves.toBeUndefined();
+        expect(gradesRepositoryMock.delete).toHaveBeenCalledWith('grade-id');
+      });
+  
+      it('lanca NotFoundException quando a nota nao existe', async () => {
+        gradesRepositoryMock.delete.mockResolvedValue({ affected: 0 });
+  
+        await expect(service.remove('missing-grade')).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      });
     });
   });
 });
