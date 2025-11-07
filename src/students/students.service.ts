@@ -233,7 +233,7 @@ export class StudentsService {
       return [];
     }
 
-    const activityIds = grades.map((g) => g.activityId);
+    const activityIds = grades.map((g) => g.activity);
     const activities =
       activityIds.length > 0
         ? await this.activityRepository
@@ -247,7 +247,7 @@ export class StudentsService {
     const enrollmentMap = new Map(enrollments.map((e) => [e.id, e]));
 
     return grades.map((grade) => {
-      const activity = activities.find((a) => a.id === grade.activityId);
+      const activity = activities.find((a) => a === grade.activity);
       const enrollment = enrollmentMap.get(grade.enrollment.id);
 
       return {
@@ -255,7 +255,7 @@ export class StudentsService {
         activityTitle: activity?.title || '',
         disciplineName: enrollment?.class.discipline?.name || activity?.class?.discipline?.name || '',
         score: Number(grade.score),
-        maxScore: activity?.max_score ? Number(activity.max_score) : null,
+        maxScore: activity?.maxScore ? Number(activity.maxScore) : null,
         gradedAt: grade.gradedAt ?? null,
       };
     }) as RecentGrade[];
@@ -324,7 +324,7 @@ export class StudentsService {
       .where('enrollment.id IN (:...enrollmentIds)', { enrollmentIds })
       .getMany();
 
-    const activityIds = grades.map((g) => g.activityId);
+    const activityIds = grades.map((g) => g.activity);
     const activities =
       activityIds.length > 0
         ? await this.activityRepository
@@ -348,7 +348,7 @@ export class StudentsService {
       });
 
       bestGrade = Number(gradeWithBest.score);
-      const activity = activities.find((a) => a.id === gradeWithBest.activityId);
+      const activity = activities.find((a) => a === gradeWithBest.activity);
       bestGradeActivity = activity?.title || null;
     }
 

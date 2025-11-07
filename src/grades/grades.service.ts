@@ -1,14 +1,14 @@
-import { Attendance } from '../attendances/entities/attendance.entity';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Activity } from '../activities/entities/activity.entity';
-import { Class } from '../classes/entities/class.entity';
-import { Enrollment } from '../enrollments/entities/enrollment.entity';
-import { User } from '../users/entities/user.entity';
+import { Grade } from './entities/grade.entity';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
-import { Grade } from './entities/grade.entity';
+import { Enrollment } from '../enrollments/entities/enrollment.entity';
+import { Activity } from '../activities/entities/activity.entity';
+import { Class } from '../classes/entities/class.entity';
+import { User } from '../users/entities/user.entity';
+import { Attendance } from '../attendances/entities/attendance.entity';
 
 interface FindGradesQuery {
   enrollmentId?: string;
@@ -33,7 +33,7 @@ export interface ActivityGradebook {
   activity: {
     id: string;
     title: string;
-    description: string;
+    description: string | null;
     type: string;
     due_date: Date | null;
     max_score: number | null;
@@ -166,11 +166,20 @@ export class GradesService {
 
   async create(createGradeDto: CreateGradeDto): Promise<Grade> {
     const enrollment = await this.findEnrollment(createGradeDto.enrollmentId);
+    const activity = await this.activityRepository.findOneBy({
+      id: createGradeDto.activityId,
+    });
+
+    if (!activity) {
+      throw new NotFoundException(
+        `Atividade com o ID '${createGradeDto.activityId}' nao encontrada.`,
+      );
+    }
 
     const existingGrade = await this.gradesRepository.findOne({
       where: {
         enrollment: { id: enrollment.id },
-        activityId: createGradeDto.activityId,
+        activity: { id: activity.id },
       },
     });
 
@@ -182,11 +191,11 @@ export class GradesService {
 
     const grade = this.gradesRepository.create({
       enrollment,
-      activityId: createGradeDto.activityId,
+      activity,
       score: createGradeDto.score,
       gradedAt: createGradeDto.gradedAt
         ? new Date(createGradeDto.gradedAt)
-        : undefined,
+        : new Date(),
     });
 
     return this.gradesRepository.save(grade);
@@ -216,8 +225,8 @@ export class GradesService {
         relations: ['student'],
       }),
       this.gradesRepository.find({
-        where: { activityId },
-        relations: ['enrollment', 'enrollment.student'],
+        where: { activity: { id: activityId } },
+        relations: ['enrollment'],
       }),
     ]);
 
@@ -241,7 +250,7 @@ export class GradesService {
         grade: grade
           ? {
               id: grade.id,
-              score: grade.score,
+              score: Number(grade.score),
               gradedAt: grade.gradedAt ?? null,
             }
           : null,
@@ -254,8 +263,8 @@ export class GradesService {
         title: activity.title,
         description: activity.description,
         type: activity.type,
-        due_date: activity.due_date,
-        max_score: activity.max_score,
+        due_date: activity.dueDate ? new Date(activity.dueDate) : null,
+        max_score: activity.maxScore !== null ? Number(activity.maxScore) : null,
         classId: activity.class.id,
       },
       entries,
@@ -263,26 +272,26 @@ export class GradesService {
   }
 
   findAll(query: FindGradesQuery): Promise<Grade[]> {
-    const where: Record<string, unknown> = {};
+    const where: any = {};
 
     if (query.enrollmentId) {
       where.enrollment = { id: query.enrollmentId };
     }
 
     if (query.activityId) {
-      where.activityId = query.activityId;
+      where.activity = { id: query.activityId };
     }
 
     return this.gradesRepository.find({
       where,
-      relations: ['enrollment'],
+      relations: ['enrollment', 'activity'],
     });
   }
 
   async findOne(id: string): Promise<Grade> {
     const grade = await this.gradesRepository.findOne({
       where: { id },
-      relations: ['enrollment'],
+      relations: ['enrollment', 'activity'],
     });
 
     if (!grade) {
@@ -301,22 +310,30 @@ export class GradesService {
 
     if (
       updateGradeDto.activityId &&
-      updateGradeDto.activityId !== grade.activityId
+      updateGradeDto.activityId !== grade.activity.id
     ) {
+      const newActivity = await this.activityRepository.findOneBy({
+        id: updateGradeDto.activityId,
+      });
+      if (!newActivity) {
+        throw new NotFoundException(
+          `Atividade com o ID '${updateGradeDto.activityId}' nao encontrada.`,
+        );
+      }
+
       const duplicate = await this.gradesRepository.findOne({
         where: {
           enrollment: { id: grade.enrollment.id },
-          activityId: updateGradeDto.activityId,
+          activity: { id: updateGradeDto.activityId },
         },
       });
 
-      if (duplicate) {
+      if (duplicate && duplicate.id !== id) {
         throw new ConflictException(
           'Esta atividade ja recebeu nota para a matricula informada.',
         );
       }
-
-      grade.activityId = updateGradeDto.activityId;
+      grade.activity = newActivity;
     }
 
     if (updateGradeDto.score !== undefined) {
@@ -341,9 +358,7 @@ export class GradesService {
   }
 
   async getStudentGradebook(studentId: string): Promise<StudentGradebook> {
-    const student = await this.userRepository.findOne({
-      where: { id: studentId },
-    });
+    const student = await this.userRepository.findOneBy({ id: studentId });
 
     if (!student) {
       throw new NotFoundException(
@@ -361,16 +376,16 @@ export class GradesService {
     const grades = enrollmentIds.length
       ? await this.gradesRepository.find({
           where: { enrollment: { id: In(enrollmentIds) } },
-          relations: ['enrollment'],
+          relations: ['enrollment', 'activity'],
         })
       : [];
 
     const gradeByEnrollmentAndActivity = new Map<string, Grade>();
     grades.forEach((grade) => {
-      gradeByEnrollmentAndActivity.set(
-        `${grade.enrollment.id}:${grade.activityId}`,
-        grade,
-      );
+      if (grade.enrollment?.id && grade.activity?.id) {
+        const key = `${grade.enrollment.id}:${grade.activity.id}`;
+        gradeByEnrollmentAndActivity.set(key, grade);
+      }
     });
 
     const classes: StudentClassGrades[] = enrollments.map((enrollment) => {
@@ -378,36 +393,35 @@ export class GradesService {
       const activities = (clazz.activities ?? [])
         .slice()
         .sort((a, b) => {
-          const aTime = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-          const bTime = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-          if (aTime === bTime) {
-            return a.title.localeCompare(b.title);
-          }
+          const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+          const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
           return aTime - bTime;
         });
 
-      const activityEntries: StudentActivityGrade[] = activities.map((activity) => {
-        const grade =
-          gradeByEnrollmentAndActivity.get(
-            `${enrollment.id}:${activity.id}`,
-          ) ?? null;
+      const activityEntries: StudentActivityGrade[] = activities.map(
+        (activity) => {
+          const grade =
+            gradeByEnrollmentAndActivity.get(
+              `${enrollment.id}:${activity.id}`,
+            ) ?? null;
 
-        return {
-          id: activity.id,
-          title: activity.title,
-          description: activity.description,
-          type: activity.type,
-          due_date: activity.due_date ?? null,
-          max_score: activity.max_score ?? null,
-          grade: grade
-            ? {
-                id: grade.id,
-                score: grade.score,
-                gradedAt: grade.gradedAt ?? null,
-              }
-            : null,
-        };
-      });
+          return {
+            id: activity.id,
+            title: activity.title,
+            description: activity.description,
+            type: activity.type,
+            due_date: activity.dueDate ? new Date(activity.dueDate) : null,
+            max_score: activity.maxScore !== null ? Number(activity.maxScore) : null,
+            grade: grade
+              ? {
+                  id: grade.id,
+                  score: Number(grade.score),
+                  gradedAt: grade.gradedAt ?? null,
+                }
+              : null,
+          };
+        },
+      );
 
       return {
         enrollmentId: enrollment.id,
@@ -456,26 +470,23 @@ export class GradesService {
     const grades: Grade[] = enrollmentIds.length
       ? await this.gradesRepository.find({
           where: { enrollment: { id: In(enrollmentIds) } },
-          relations: ['enrollment'],
+          relations: ['enrollment', 'activity'],
         })
       : [];
 
     const gradeByEnrollmentAndActivity = new Map<string, Grade>();
     grades.forEach((grade) => {
-      gradeByEnrollmentAndActivity.set(
-        `${grade.enrollment.id}:${grade.activityId}`,
-        grade,
-      );
+      if (grade.enrollment?.id && grade.activity?.id) {
+        const key = `${grade.enrollment.id}:${grade.activity.id}`;
+        gradeByEnrollmentAndActivity.set(key, grade);
+      }
     });
 
     const activities = (clazz.activities ?? [])
       .slice()
       .sort((a, b) => {
-        const aTime = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-        const bTime = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-        if (aTime === bTime) {
-          return a.title.localeCompare(b.title);
-        }
+        const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
         return aTime - bTime;
       });
 
@@ -500,7 +511,7 @@ export class GradesService {
             grade: grade
               ? {
                   id: grade.id,
-                  score: grade.score,
+                  score: Number(grade.score),
                   gradedAt: grade.gradedAt ?? null,
                 }
               : null,
@@ -534,17 +545,15 @@ export class GradesService {
         title: activity.title,
         description: activity.description,
         type: activity.type,
-        due_date: activity.due_date ?? null,
-        max_score: activity.max_score ?? null,
+        due_date: activity.dueDate ? new Date(activity.dueDate) : null,
+        max_score: activity.maxScore !== null ? Number(activity.maxScore) : null,
       })),
       entries,
     };
   }
 
   async getStudentGradesDetailed(studentId: string): Promise<DetailedStudentGrades> {
-    const student = await this.userRepository.findOne({
-      where: { id: studentId },
-    });
+    const student = await this.userRepository.findOneBy({ id: studentId });
 
     if (!student) {
       throw new NotFoundException(
@@ -563,23 +572,23 @@ export class GradesService {
       enrollmentIds.length
         ? this.gradesRepository.find({
             where: { enrollment: { id: In(enrollmentIds) } },
-            relations: ['enrollment'],
+            relations: ['enrollment', 'activity'],
           })
-        : [] as Grade[],
+        : ([] as Grade[]),
       enrollmentIds.length
         ? this.attendanceRepository.find({
             where: { enrollment: { id: In(enrollmentIds) } },
             relations: ['enrollment'],
           })
-        : [] as Attendance[],
+        : ([] as Attendance[]),
     ]);
 
     const gradeByEnrollmentAndActivity = new Map<string, Grade>();
     grades.forEach((grade) => {
-      gradeByEnrollmentAndActivity.set(
-        `${grade.enrollment.id}:${grade.activityId}`,
-        grade,
-      );
+      if (grade.enrollment?.id && grade.activity?.id) {
+        const key = `${grade.enrollment.id}:${grade.activity.id}`;
+        gradeByEnrollmentAndActivity.set(key, grade);
+      }
     });
 
     const attendanceByEnrollment = new Map<string, Attendance[]>();
@@ -596,34 +605,40 @@ export class GradesService {
 
     const disciplines: DetailedGradeByDiscipline[] = enrollments.map((enrollment) => {
       const clazz = enrollment.class;
-      const enrollmentGrades = grades.filter((g) => g.enrollment.id === enrollment.id);
-      const enrollmentAttendances = attendanceByEnrollment.get(enrollment.id) || [];
+      const enrollmentGrades = grades.filter(
+        (g) => g.enrollment.id === enrollment.id,
+      );
+      const enrollmentAttendances =
+        attendanceByEnrollment.get(enrollment.id) || [];
 
       const average =
         enrollmentGrades.length > 0
-          ? enrollmentGrades.reduce((sum, g) => sum + Number(g.score), 0) / enrollmentGrades.length
+          ? enrollmentGrades.reduce((sum, g) => sum + Number(g.score), 0) /
+            enrollmentGrades.length
           : 0;
 
       const totalAttendance = enrollmentAttendances.length;
       const presentCount = enrollmentAttendances.filter((a) => a.present).length;
       const attendancePercentage =
-        totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 0;
+        totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 100;
 
       let status: 'approved' | 'reproved' | 'in_progress';
-      if (average >= MIN_APPROVAL_SCORE && attendancePercentage >= MIN_ATTENDANCE_PERCENTAGE) {
-        status = 'approved';
-      } else if (
-        enrollmentGrades.length > 0 &&
-        (average < MIN_APPROVAL_SCORE || attendancePercentage < MIN_ATTENDANCE_PERCENTAGE)
-      ) {
-        status = 'reproved';
-      } else {
+      const isFinished = true;
+
+      if (!isFinished) {
         status = 'in_progress';
+      } else if (
+        average >= MIN_APPROVAL_SCORE &&
+        attendancePercentage >= MIN_ATTENDANCE_PERCENTAGE
+      ) {
+        status = 'approved';
+      } else {
+        status = 'reproved';
       }
 
       const activities = (clazz.activities ?? []).sort((a, b) => {
-        const aTime = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
-        const bTime = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
         return aTime - bTime;
       });
 
@@ -642,19 +657,19 @@ export class GradesService {
           title: activity.title,
           description: activity.description,
           type: activity.type,
-          due_date: activity.due_date ?? null,
-          max_score: activity.max_score ?? null,
+          due_date: activity.dueDate ? new Date(activity.dueDate) : null,
+          max_score: activity.maxScore !== null ? Number(activity.maxScore) : null,
           grade: grade
             ? {
                 id: grade.id,
-                score: grade.score,
+                score: Number(grade.score),
                 gradedAt: grade.gradedAt ?? null,
               }
             : null,
         };
 
-        const period = activity.due_date
-          ? this.getPeriodFromDate(new Date(activity.due_date))
+        const period = activity.dueDate
+          ? this.getPeriodFromDate(new Date(activity.dueDate))
           : 'Sem período';
 
         let periodEntry = gradesByPeriod.find((p) => p.period === period);
