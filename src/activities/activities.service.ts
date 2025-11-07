@@ -26,15 +26,15 @@ export class ActivitiesService {
   ) {}
 
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
-    const { class_id, ...rest } = createActivityDto;
+    const { classId, ...rest } = createActivityDto;
 
     const classEntity = await this.classRepository.findOne({
-      where: { id: class_id },
+      where: { id: classId },
     });
 
     if (!classEntity) {
       throw new NotFoundException(
-        `Turma com ID "${class_id}" nao encontrada.`,
+        `Turma com ID "${classId}" nao encontrada.`,
       );
     }
 
@@ -62,21 +62,21 @@ export class ActivitiesService {
   }
 
   async update(id: string, updateActivityDto: UpdateActivityDto): Promise<Activity> {
-    const { class_id, ...rest } = updateActivityDto;
+    const { classId, ...rest } = updateActivityDto;
 
     const preloadData: Partial<Activity> = {
       id,
       ...rest,
     };
 
-    if (class_id !== undefined) {
+    if (classId !== undefined) {
       const classEntity = await this.classRepository.findOne({
-        where: { id: class_id },
+        where: { id: classId },
       });
 
       if (!classEntity) {
         throw new NotFoundException(
-          `Turma com ID "${class_id}" nao encontrada.`,
+          `Turma com ID "${classId}" nao encontrada.`,
         );
       }
 
