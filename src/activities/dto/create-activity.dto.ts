@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsNumber, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsEnum, IsNumber, IsUUID, IsArray } from 'class-validator';
 import { ActivityType } from '../../common/enums/activity-type.enum';
 
 export class CreateActivityDto {
@@ -22,4 +22,9 @@ export class CreateActivityDto {
   @IsOptional()
   @IsNumber()
   maxScore?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentUrls?: string[];
 }

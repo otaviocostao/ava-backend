@@ -35,4 +35,7 @@ export class Activity {
     transformer: new ColumnNumericTransformer(),
   })
   maxScore: number;
+
+  @Column({ name: 'attachment_urls', type: 'jsonb', nullable: true })
+  attachmentUrls: string[] | null;
 }

@@ -24,6 +24,12 @@ export class ActivitiesController {
     return this.activitiesService.findAllWithFilters(query);
   }
 
+  @Get('students/:studentId/submissions')
+  @ApiOperation({ summary: 'Lista todas as submissões de um aluno específico.' })
+  findSubmissionsByStudentId(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.activitiesService.findSubmissionsByStudentId(studentId);
+  }
+
   @Get('students/:studentId')
   @ApiOperation({ summary: 'Lista todas as atividades do aluno filtradas por studentId.' })
   findByStudentId(@Param('studentId', ParseUUIDPipe) studentId: string) {
@@ -58,6 +64,27 @@ export class ActivitiesController {
       studentId || submitActivityDto.studentId || '',
       submitActivityDto.fileUrl,
     );
+  }
+
+  @Get(':activityId/submissions/students/:studentId')
+  @ApiOperation({ summary: 'Busca a submissão de um aluno específico para uma atividade.' })
+  findSubmissionByActivityAndStudent(
+    @Param('activityId', ParseUUIDPipe) activityId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.activitiesService.findSubmissionByActivityAndStudent(activityId, studentId);
+  }
+
+  @Get(':activityId/submissions')
+  @ApiOperation({ summary: 'Lista todas as submissões de uma atividade específica.' })
+  findSubmissionsByActivityId(@Param('activityId', ParseUUIDPipe) activityId: string) {
+    return this.activitiesService.findSubmissionsByActivityId(activityId);
+  }
+
+  @Get('submissions/:submissionId')
+  @ApiOperation({ summary: 'Recupera os detalhes de uma submissão específica pelo ID.' })
+  findSubmissionById(@Param('submissionId', ParseUUIDPipe) submissionId: string) {
+    return this.activitiesService.findSubmissionById(submissionId);
   }
 
   @Get(':id')

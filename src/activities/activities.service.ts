@@ -206,6 +206,78 @@ export class ActivitiesService {
     return this.activitySubmissionRepository.save(submission);
   }
 
+  async findSubmissionsByActivityId(activityId: string): Promise<ActivitySubmission[]> {
+    const activity = await this.activityRepository.findOne({ where: { id: activityId } });
+
+    if (!activity) {
+      throw new NotFoundException(`Atividade com ID "${activityId}" nao encontrada.`);
+    }
+
+    return this.activitySubmissionRepository.find({
+      where: { activity: { id: activityId } },
+      relations: ['student', 'activity'],
+      order: { submittedAt: 'DESC' },
+    });
+  }
+
+  async findSubmissionByActivityAndStudent(
+    activityId: string,
+    studentId: string,
+  ): Promise<ActivitySubmission> {
+    const [activity, student] = await Promise.all([
+      this.activityRepository.findOne({ where: { id: activityId } }),
+      this.userRepository.findOne({ where: { id: studentId } }),
+    ]);
+
+    if (!activity) {
+      throw new NotFoundException(`Atividade com ID "${activityId}" nao encontrada.`);
+    }
+
+    if (!student) {
+      throw new NotFoundException(`Estudante com ID "${studentId}" nao encontrado.`);
+    }
+
+    const submission = await this.activitySubmissionRepository.findOne({
+      where: { activity: { id: activityId }, student: { id: studentId } },
+      relations: ['student', 'activity'],
+    });
+
+    if (!submission) {
+      throw new NotFoundException(
+        `Submissao nao encontrada para a atividade "${activityId}" e estudante "${studentId}".`,
+      );
+    }
+
+    return submission;
+  }
+
+  async findSubmissionsByStudentId(studentId: string): Promise<ActivitySubmission[]> {
+    const student = await this.userRepository.findOne({ where: { id: studentId } });
+
+    if (!student) {
+      throw new NotFoundException(`Estudante com ID "${studentId}" nao encontrado.`);
+    }
+
+    return this.activitySubmissionRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['activity', 'activity.class'],
+      order: { submittedAt: 'DESC' },
+    });
+  }
+
+  async findSubmissionById(submissionId: string): Promise<ActivitySubmission> {
+    const submission = await this.activitySubmissionRepository.findOne({
+      where: { id: submissionId },
+      relations: ['student', 'activity', 'activity.class'],
+    });
+
+    if (!submission) {
+      throw new NotFoundException(`Submissao com ID "${submissionId}" nao encontrada.`);
+    }
+
+    return submission;
+  }
+
   private async findClassOrThrowException(classId: string): Promise<Class> {
     const classEntity = await this.classRepository.findOne({
       where: { id: classId },
