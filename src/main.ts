@@ -33,7 +33,11 @@ async function bootstrap() {
     .addTag('v1', 'Recursos estaveis disponiveis na primeira versao publica da API.')
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api', app, documentFactory);
+  SwaggerModule.setup('api', app, documentFactory, {
+    swaggerOptions: {
+      tagsSorter: 'alpha',
+    },
+  });
   await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap();

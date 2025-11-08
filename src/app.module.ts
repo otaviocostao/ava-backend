@@ -28,6 +28,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { LiveClassGateway } from './live-class/live-class.gateway';
 import { LiveClassModule } from './live-class/live-class.module';
 import { NoticeBoardModule } from './notice-board/notice-board.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [

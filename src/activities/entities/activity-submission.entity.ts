@@ -10,6 +10,7 @@ import {
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
+import { FileUrlsTransformer } from '../../common/transformers/file-urls.transformer';
 
 @Entity('activity_submissions')
 @Unique(['activity', 'student'])
@@ -32,8 +33,13 @@ export class ActivitySubmission {
   })
   status: ActivitySubmissionStatus;
 
-  @Column({ name: 'file_url', type: 'text', nullable: true })
-  fileUrl: string | null;
+  @Column({
+    name: 'file_urls',
+    type: 'jsonb',
+    nullable: true,
+    transformer: new FileUrlsTransformer(),
+  })
+  fileUrls: string[] | null;
 
   @CreateDateColumn({ name: 'submitted_at', type: 'timestamp with time zone', nullable: true })
   submittedAt: Date | null;

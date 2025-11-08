@@ -1,12 +1,13 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsArray } from 'class-validator';
 
 export class SubmitActivityDto {
   @IsUUID()
   @IsOptional()
   studentId?: string;
 
-  @IsString()
+  @IsArray()
+  @IsString({ each: true })
   @IsOptional()
-  fileUrl?: string;
+  fileUrls?: string[];
 }
 

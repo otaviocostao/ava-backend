@@ -7,10 +7,12 @@ import { ActivitySubmission } from './entities/activity-submission.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Activity, ActivitySubmission, Class, User, Enrollment]),
+    StorageModule,
   ],
   controllers: [ActivitiesController],
   providers: [ActivitiesService],
