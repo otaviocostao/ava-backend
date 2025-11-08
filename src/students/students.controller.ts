@@ -53,6 +53,12 @@ export class StudentsController {
     return this.studentsService.getDisciplines(studentId);
   }
 
+  @Get(':studentId/classes')
+  @ApiOperation({ summary: 'Lista todos as classes em que o usuário está cadastrado.' })
+  findStudentClasses(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.studentsService.findStudentClasses(studentId);
+  }
+
   @Get(':studentId/completed-hours')
   @ApiOperation({ summary: 'Calcula carga horária cumprida pelo aluno.' })
   getCompletedHours(@Param('studentId', ParseUUIDPipe) studentId: string) {

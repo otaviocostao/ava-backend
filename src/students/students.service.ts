@@ -8,6 +8,7 @@ import { Attendance } from '../attendances/entities/attendance.entity';
 import { Activity } from '../activities/entities/activity.entity';
 import { ActivitySubmission } from '../activities/entities/activity-submission.entity';
 import { Schedule } from '../schedules/entities/schedule.entity';
+import { Class } from 'src/classes/entities/class.entity';
 
 export interface DashboardSummary {
   overallAttendance: number;
@@ -408,6 +409,47 @@ export class StudentsService {
     }));
   }
 
+  async findStudentClasses(studentId: string) {
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: [
+        'class',
+        'class.discipline',
+        'class.teacher',
+      ],
+      order: {
+        class: {
+          year: 'DESC',
+          semester: 'DESC',
+        }
+      }
+    });
+
+    if (!enrollments || enrollments.length === 0) {
+      return [];
+    }
+    
+    return enrollments.map(enrollment => {
+      const { class: studentClass } = enrollment;
+      return {
+        id: studentClass.id,
+        code: studentClass.code,
+        semester: studentClass.semester,
+        year: studentClass.year,
+        discipline: {
+          id: studentClass.discipline.id,
+          name: studentClass.discipline.name,
+        },
+        teacher: studentClass.teacher ? {
+          id: studentClass.teacher.id,
+          name: studentClass.teacher.name,
+        } : null,
+        progresso: Math.floor(Math.random() * 100),
+        media: parseFloat((Math.random() * 10).toFixed(1)),
+      };
+    });
+  }
+  
   async getCompletedHours(studentId: string): Promise<number> {
     await this.ensureStudentExists(studentId);
 
