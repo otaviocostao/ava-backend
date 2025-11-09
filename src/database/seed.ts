@@ -13,6 +13,7 @@ import { Forum } from '../forums/entities/forum.entity';
 import { LessonPlan } from '../lesson-plans/entities/lesson-plan.entity';
 import { Availability } from '../availabilities/entities/availability.entity';
 import { ActivityType } from '../common/enums/activity-type.enum';
+import { ActivityUnit } from '../common/enums/activity-unit.enum';
 import { DayOfWeek } from '../common/enums/day-of-week.enum';
 import { CourseStatus } from '../common/enums/course-status.enum';
 
@@ -303,40 +304,45 @@ async function createActivities(dataSource: DataSource, classes: Class[]): Promi
       title: 'Exercícios de Variáveis e Operadores',
       description: 'Resolva os exercícios sobre declaração de variáveis e operadores aritméticos.',
       type: ActivityType.HOMEWORK,
-      due_date: new Date('2024-03-15'),
-      max_score: 10.0,
+      unit: ActivityUnit.FIRST_UNIT,
+      dueDate: new Date('2024-03-15'),
+      maxScore: 10.0,
     },
     {
       class: classes[0],
       title: 'Prova Parcial - Fundamentos',
       description: 'Prova sobre conceitos básicos de programação.',
       type: ActivityType.EXAM,
-      due_date: new Date('2024-04-20'),
-      max_score: 50.0,
+      unit: ActivityUnit.FIRST_UNIT,
+      dueDate: new Date('2024-04-20'),
+      maxScore: 50.0,
     },
     {
       class: classes[1],
       title: 'Implementação de Lista Encadeada',
       description: 'Implemente uma lista encadeada com operações básicas.',
       type: ActivityType.PROJECT,
-      due_date: new Date('2024-05-10'),
-      max_score: 25.0,
+      unit: ActivityUnit.SECOND_UNIT,
+      dueDate: new Date('2024-05-10'),
+      maxScore: 25.0,
     },
     {
       class: classes[2],
       title: 'Site Responsivo com HTML/CSS',
       description: 'Crie um site responsivo usando HTML5 e CSS3.',
       type: ActivityType.PROJECT,
-      due_date: new Date('2024-06-15'),
-      max_score: 30.0,
+      unit: ActivityUnit.SECOND_UNIT,
+      dueDate: new Date('2024-06-15'),
+      maxScore: 30.0,
     },
     {
       class: classes[3],
       title: 'Exercícios de Estruturas Condicionais',
       description: 'Resolva problemas usando if/else e switch.',
       type: ActivityType.HOMEWORK,
-      due_date: new Date('2024-08-20'),
-      max_score: 15.0,
+      unit: ActivityUnit.FIRST_UNIT,
+      dueDate: new Date('2024-08-20'),
+      maxScore: 15.0,
     },
   ];
 

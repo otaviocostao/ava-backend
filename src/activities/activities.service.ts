@@ -12,6 +12,7 @@ import { ActivitySubmissionStatus } from '../common/enums/activity-submission-st
 import { StorageService } from '../storage/storage.service';
 import { nanoid } from 'nanoid';
 import { MulterFile } from 'src/common/types/multer.types';
+import { ActivityUnit } from '../common/enums/activity-unit.enum';
 
 @Injectable()
 export class ActivitiesService {
@@ -31,13 +32,48 @@ export class ActivitiesService {
     private readonly storageService: StorageService,
   ) {}
 
+  /**
+   * Normaliza o valor da unidade para o formato padrão do enum.
+   * Aceita valores como "unidade 1", "unidade 2", "prova final" e converte para os valores do enum.
+   * Também aceita valores já no formato correto do enum.
+   */
+  private normalizeUnit(unit: string | ActivityUnit): ActivityUnit {
+    // Se já for um valor válido do enum, retorna como está
+    if (Object.values(ActivityUnit).includes(unit as ActivityUnit)) {
+      return unit as ActivityUnit;
+    }
+
+    const normalizedUnit = String(unit).trim().toLowerCase();
+
+    if (normalizedUnit === 'unidade 1' || normalizedUnit === '1ª unidade') {
+      return ActivityUnit.FIRST_UNIT;
+    }
+
+    if (normalizedUnit === 'unidade 2' || normalizedUnit === '2ª unidade') {
+      return ActivityUnit.SECOND_UNIT;
+    }
+
+    if (normalizedUnit === 'prova final') {
+      return ActivityUnit.FINAL_EXAM;
+    }
+
+    // Se não corresponder a nenhum formato conhecido, lança erro
+    throw new BadRequestException(
+      `Unidade inválida: "${unit}". Valores aceitos: ${Object.values(ActivityUnit).join(', ')}`,
+    );
+  }
+
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
-    const { classId, ...rest } = createActivityDto;
+    const { classId, unit, ...rest } = createActivityDto;
 
     const classEntity = await this.findClassOrThrowException(classId);
 
+    // Normaliza o valor da unidade antes de salvar
+    const normalizedUnit = this.normalizeUnit(unit);
+
     const activity = this.activityRepository.create({
       ...rest,
+      unit: normalizedUnit,
       class: classEntity,
     });
 
@@ -225,12 +261,17 @@ export class ActivitiesService {
   }
 
   async update(id: string, updateActivityDto: UpdateActivityDto): Promise<Activity> {
-    const { classId, ...rest } = updateActivityDto;
+    const { classId, unit, ...rest } = updateActivityDto;
 
     const preloadData: Partial<Activity> = {
       id,
       ...rest,
     };
+
+    // Normaliza o valor da unidade se fornecido
+    if (unit !== undefined) {
+      preloadData.unit = this.normalizeUnit(unit);
+    }
 
     if (classId !== undefined) {
       const classEntity = await this.findClassOrThrowException(classId);
