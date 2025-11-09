@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsNumber, IsUUID, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsEnum, IsNumber, IsUUID, IsArray, IsNotEmpty } from 'class-validator';
 import { ActivityType } from '../../common/enums/activity-type.enum';
 
 export class CreateActivityDto {
@@ -7,6 +7,10 @@ export class CreateActivityDto {
 
   @IsString()
   title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  unit?: string;
 
   @IsOptional()
   @IsString()
