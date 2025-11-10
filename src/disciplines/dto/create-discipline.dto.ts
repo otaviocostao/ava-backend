@@ -13,4 +13,8 @@ export class CreateDisciplineDto {
 
   @IsNumber()
   credits: number;
+
+  @IsNumber()
+  @IsNotEmpty({message: 'O campo workload deve receber um valor int para informar a carga horária da disciplina'})
+  workload: number;
 }

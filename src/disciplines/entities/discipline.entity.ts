@@ -13,6 +13,9 @@ export class Discipline {
     @ManyToMany(() => Course, (course) => course.disciplines)
     courses: Course[];
 
+    @Column({ type: 'int', name: 'workload', default: 0 })
+    workLoad: number;
+
     @Column({ type: 'int', nullable: true })
     credits: number;
 
