@@ -15,6 +15,9 @@ export class Attendance {
     @JoinColumn({ name: 'student_id' })
     student: User;
 
+    @Column({ type: 'int', name: 'class_hour', default: 1 })
+    classHour: number;
+
     @Column({ type: 'date', nullable: false })
     date: string;
 
