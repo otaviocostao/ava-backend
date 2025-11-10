@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -79,5 +80,14 @@ export class UsersController {
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
     return this.usersService.getStudentGradebook(studentId);
+  }
+
+  @Get(':studentId/attendance')
+  @ApiOperation({ summary: 'Lista a frequencia de todas as Turmas usuario (estudante).' })
+  getStudentFrequency(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Query('semestre') semestre: string,
+  ) {
+    return this.usersService.getStudentFrequency(studentId, semestre);
   }
 }
