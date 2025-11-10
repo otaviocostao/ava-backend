@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Role } from '../roles/entities/role.entity';
 import { User } from '../users/entities/user.entity';
+import * as bcrypt from 'bcrypt';
 
 async function initializeSystem() {
   console.log('🚀 Inicializando sistema AVA...');
@@ -82,6 +83,7 @@ async function createInitialRoles(dataSource: DataSource): Promise<Role[]> {
     { name: 'admin' },
     { name: 'teacher' },
     { name: 'student' },
+    { name: 'coordinator' },
   ];
 
   const createdRoles: Role[] = [];
@@ -111,7 +113,7 @@ async function createAdminUser(dataSource: DataSource, roles: Role[], configServ
   const adminUserData = {
     name: 'Administrador do Sistema',
     email: 'admin@ava.com',
-    password: adminPassword,
+    password: await bcrypt.hash(adminPassword, 10),
   };
 
   const adminUser = userRepository.create(adminUserData);

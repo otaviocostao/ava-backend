@@ -31,6 +31,17 @@ async function bootstrap() {
     .setDescription('Documentacao interativa com todos os endpoints REST expostos pela plataforma Ava.')
     .setVersion('1.0')
     .addTag('v1', 'Recursos estaveis disponiveis na primeira versao publica da API.')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Digite o token JWT obtido no endpoint /auth/login',
+        in: 'header',
+      },
+      'JWT-auth', // Este nome deve corresponder ao usado em @ApiBearerAuth('JWT-auth')
+    )
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api', app, documentFactory, {

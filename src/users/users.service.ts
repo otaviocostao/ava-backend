@@ -84,6 +84,15 @@ export class UsersService {
     }
   }
 
+  async findByEmailWithPassword(email: string): Promise<User | null> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .leftJoinAndSelect('user.roles', 'role')
+      .where('user.email = :email', { email })
+      .getOne();
+  }
+
   async assignRoleToUser(userId: string, roleId: string): Promise<User> {
     
     const user = await this.userRepository.findOne({
