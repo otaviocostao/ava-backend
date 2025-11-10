@@ -16,6 +16,7 @@ import { ActivityType } from '../common/enums/activity-type.enum';
 import { ActivityUnit } from '../common/enums/activity-unit.enum';
 import { DayOfWeek } from '../common/enums/day-of-week.enum';
 import { CourseStatus } from '../common/enums/course-status.enum';
+import * as bcrypt from 'bcrypt';
 
 async function seed() {
   console.log('🌱 Iniciando seed do banco de dados...');
@@ -194,6 +195,12 @@ async function createUsers(dataSource: DataSource): Promise<User[]> {
       password: '123456',
       roleName: 'student',
     },
+    {
+      name: 'Coord. Paulo Andrade',
+      email: 'paulo.andrade@ava.com',
+      password: '123456',
+      roleName: 'coordinator',
+    },
   ];
 
   const roleRepository = dataSource.getRepository(Role);
@@ -201,10 +208,12 @@ async function createUsers(dataSource: DataSource): Promise<User[]> {
   
   for (const userData of usersData) {
     // Verificar se o usuário já existe
-    let existingUser = await userRepository.findOne({ 
-      where: { email: userData.email },
-      relations: ['roles']
-    });
+    let existingUser = await userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .leftJoinAndSelect('user.roles', 'role')
+      .where('user.email = :email', { email: userData.email })
+      .getOne();
     
     if (!existingUser) {
       // Buscar role pelo nome
@@ -217,13 +226,31 @@ async function createUsers(dataSource: DataSource): Promise<User[]> {
       const user = userRepository.create({
         name: userData.name,
         email: userData.email,
-        password: userData.password,
+        password: await bcrypt.hash(userData.password, 10),
       });
       const savedUser = await userRepository.save(user);
       
       // Associar role ao usuário
       savedUser.roles = [role];
       existingUser = await userRepository.save(savedUser);
+    } else {
+      // Verificar se a senha precisa ser atualizada (se não estiver com hash)
+      const passwordHash = await bcrypt.hash(userData.password, 10);
+      const needsPasswordUpdate = !existingUser.password || !existingUser.password.startsWith('$2');
+      
+      if (needsPasswordUpdate) {
+        existingUser.password = passwordHash;
+        await userRepository.save(existingUser);
+        console.log(`   🔄 Senha atualizada para: ${userData.email}`);
+      }
+      
+      // Verificar se a role está correta
+      const role = await roleRepository.findOne({ where: { name: userData.roleName } });
+      if (role && (!existingUser.roles || !existingUser.roles.some(r => r.name === userData.roleName))) {
+        existingUser.roles = [role];
+        await userRepository.save(existingUser);
+        console.log(`   🔄 Role atualizada para: ${userData.email}`);
+      }
     }
     
     createdUsers.push(existingUser);
