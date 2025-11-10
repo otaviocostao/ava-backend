@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Repository } from 'typeorm';
@@ -11,6 +11,7 @@ import { GradebookEntryDto } from './dto/gradebook-entry.dto';
 import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { DetailedGradebookDto } from './dto/detailed-gradebook.dto';
 import { Class } from 'src/classes/entities/class.entity';
+import { AttendanceData, DetailedAbsence } from './dto/frequency-user.dto';
 
 
 @Injectable()
@@ -151,40 +152,69 @@ export class UsersService {
           return;
         }
 
+        const unidadeOriginal = grade.activity.unit;
         let unidadeFormatada = grade.activity.unit.toLowerCase(); 
 
-        if (unidadeFormatada === 'unidade 1') {
+        if (unidadeFormatada === '1ª unidade') {
           unidadeFormatada = '1ª Unidade';
-        } else if (unidadeFormatada === 'unidade 2') {
+        } else if (unidadeFormatada === '2ª unidade') {
           unidadeFormatada = '2ª Unidade';
         } else if (unidadeFormatada.toLowerCase() === 'prova final') {
           unidadeFormatada = 'Prova Final';
         }
 
-        const unidade = grade.activity.unit;
-        const notaAtual = notasPorUnidade.get(unidade) || 0;
-
-        notasPorUnidade.set(unidade, notaAtual + Number(grade.score));
+        const notaAtual = notasPorUnidade.get(unidadeFormatada) || 0;
+        notasPorUnidade.set(unidadeFormatada, notaAtual + Number(grade.score));
       });
 
-      const todasAsNotas = Array.from(notasPorUnidade.values());
+      
+      const notasParaMedia = Array.from(notasPorUnidade.entries())
+      .filter(([unidade, nota]) => unidade.toLowerCase() !== 'prova final');
+      
+      const todasAsNotas = notasParaMedia.map(([unidade, nota]) => nota);
+      
       const media = todasAsNotas.length > 0
-        ? todasAsNotas.reduce((acc, nota) => acc + nota, 0) / todasAsNotas.length
+      ? todasAsNotas.reduce((acc, nota) => acc + nota, 0) / todasAsNotas.length
         : 0;
 
       const notas = Array.from(notasPorUnidade.entries()).map(([unidade, notaTotal]) => ({
         unidade,
         nota: notaTotal,
       }));
-
-
+      
       const validGrades = enrollment.grades.filter(g => g.score !== null);
       
+      const cargaHorariaTotal = enrollment.class.discipline.workLoad;
+
+      if (cargaHorariaTotal === 0) {
+        return {
+          disciplina: enrollment.class.discipline.name,
+          codigo: enrollment.class.code,
+          media: 0, 
+          frequencia: 100, 
+          situacao: 'Em Andamento' as const,
+          notas: [], 
+          cor: 'gray', 
+        };
+      }
+
+      const attendances = await this.attendanceRepository.find({ 
+        where: { enrollment: { id: enrollment.id } } 
+      });
       
-      const attendances = await this.attendanceRepository.find({ where: { enrollment: { id: enrollment.id } } });
-      const totalAulas = attendances.length;
-      const presencas = attendances.filter(a => a.present).length;
-      const frequencia = totalAulas > 0 ? (presencas / totalAulas) * 100 : 100;
+      const totalHorasFalta = attendances.reduce((total, attendance) => {
+        if (!attendance.present) {
+          return total + attendance.classHour;
+        }
+        return total;
+      }, 0);
+
+      const horasPresente = cargaHorariaTotal - totalHorasFalta;
+      const frequencia = (horasPresente / cargaHorariaTotal) * 100;
+      
+      const LIMITE_FALTAS_PERCENTUAL = 25;
+      const limiteHorasFalta = cargaHorariaTotal * (LIMITE_FALTAS_PERCENTUAL / 100);
+
 
       const MIN_MEDIA = 7.0;
       const MIN_FREQUENCIA = 75;
@@ -195,10 +225,12 @@ export class UsersService {
        if (!isFinished) {
         situacao = 'Em Andamento';
       } else {
-        if (media >= MIN_MEDIA && frequencia >= MIN_FREQUENCIA) {
+        if (media >= MIN_MEDIA && totalHorasFalta <= limiteHorasFalta) {
           situacao = 'Aprovado';
-        } else if (media >= 4.0 && media < MIN_MEDIA && frequencia >= MIN_FREQUENCIA) {
+        } else if (media >= 5.0 && media < MIN_MEDIA && frequencia >= MIN_FREQUENCIA) {
           situacao = 'Recuperação';
+        } else if (totalHorasFalta > limiteHorasFalta) {
+          situacao = 'Reprovado'; 
         } else {
           situacao = 'Reprovado';
         }
@@ -241,15 +273,91 @@ export class UsersService {
       disciplinas,
     };
   }
-  
-  private calculateFinalGrade(grades: { score: number | null; maxScore: number | null }[]): number | null {
-      const validGrades = grades.filter(g => g.score !== null && g.maxScore !== null && g.maxScore > 0);
-      if (validGrades.length === 0) {
-          return null;
-      }
-      const totalScore = validGrades.reduce((sum, g) => sum + (g.score! / g.maxScore!) * 10, 0);
-      return parseFloat((totalScore / validGrades.length).toFixed(2));
+
+  async getStudentFrequency(studentId: string, semestre: string): Promise<AttendanceData> {
+    if (!semestre) {
+      throw new BadRequestException('O parâmetro "semestre" é obrigatório.');
+    }
+
+    const student = await this.userRepository.findOneBy({ id: studentId });
+    if (!student) {
+      throw new NotFoundException(`Aluno com ID "${studentId}" não encontrado.`);
+    }
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { 
+        student: { id: studentId },
+        class: { semester: semestre }
+      },
+      relations: [
+        'class',
+        'class.discipline',
+        'class.teacher',
+        'attendances',
+      ],
+    });
+
+    const disciplines = enrollments.map(enrollment => {
+      const { discipline, teacher } = enrollment.class;
+      const absences = enrollment.attendances.filter(a => !a.present);
+      
+      const absencesByUnit = { unit1: 0, unit2: 0 };
+
+      const detailedAbsences: DetailedAbsence[] = absences.map(absence => {
+        const date = new Date(absence.date);
+        
+        const unit = this.mapDateToUnit(date, enrollment.class.semester);
+        
+        if (unit === '1ª Unidade' ) {
+          absencesByUnit.unit1 += absence.classHour;
+        } else if (unit === '2ª Unidade' ) {
+          absencesByUnit.unit2 += absence.classHour;
+        }
+
+        return {
+          id: absence.id,
+          date: absence.date,
+          classHours: absence.classHour,
+          reason: undefined,
+          unit,
+        };
+      });
+
+      return {
+        id: enrollment.id,
+        name: discipline.name,
+        teacher: teacher ? teacher.name : 'Não definido',
+        totalWorkload: discipline.workLoad,
+        absencesByUnit,
+        absences: detailedAbsences,
+      };
+    });
+
+    const todosEnrollments = await this.enrollmentRepository.find({
+        where: { student: { id: studentId } },
+        relations: ['class'],
+    });
+    const availableSemesters = [...new Set(todosEnrollments.map(e => e.class.semester))].sort((a, b) => b.localeCompare(a));
+
+    return {
+      disciplines,
+      availableSemesters,
+    };
   }
+  
+  private mapDateToUnit(date: Date, semester: string): '1ª Unidade' | '2ª Unidade'  | 'Outra' {
+      const month = date.getMonth() + 1;
+      const [, semesterNumber] = semester.split('-').map(Number);
+  
+      if (semesterNumber === 1) { 
+        return month <= 3 ? '1ª Unidade' : '2ª Unidade' ;
+      } else if (semesterNumber === 2) {
+        return month <= 9 ? '1ª Unidade' : '2ª Unidade' ;
+      }
+      
+      return 'Outra';
+  }
+
 
   private isSemesterFinished(classInstance: Class): boolean {
     const currentDate = new Date();
