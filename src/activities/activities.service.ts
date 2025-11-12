@@ -13,6 +13,8 @@ import { StorageService } from '../storage/storage.service';
 import { nanoid } from 'nanoid';
 import { MulterFile } from 'src/common/types/multer.types';
 import { ActivityUnit } from '../common/enums/activity-unit.enum';
+import { StudentActivityDto } from './dto/student-activity.dto';
+import { Grade } from 'src/grades/entities/grade.entity';
 
 @Injectable()
 export class ActivitiesService {
@@ -29,6 +31,8 @@ export class ActivitiesService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(Grade)
+    private readonly gradeRepository: Repository<Grade>,
     private readonly storageService: StorageService,
   ) {}
 
@@ -298,6 +302,62 @@ export class ActivitiesService {
       relations: this.activityRelations,
       order: { dueDate: 'ASC' },
     });
+  }
+
+  async findActivitiesByStudent(studentId: string): Promise<StudentActivityDto[]> {
+    const student = await this.userRepository.findOneBy({ id: studentId });
+    if (!student) {
+      throw new NotFoundException(`Estudante com ID "${studentId}" não encontrado.`);
+    }
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['class'],
+    });
+
+    if (enrollments.length === 0) {
+      return [];
+    }
+
+    const classIds = enrollments.map(e => e.class.id);
+    const activities = await this.activityRepository.find({
+      where: { class: { id: In(classIds) } },
+      relations: ['class.discipline'], 
+      order: { dueDate: 'ASC' },
+    });
+    
+    const grades = await this.gradeRepository.find({
+        where: {
+            enrollment: { id: In(enrollments.map(e => e.id)) },
+            activity: { id: In(activities.map(a => a.id)) },
+        },
+        relations: ['activity'],
+    });
+    
+    const gradesMap = new Map<string, Grade>();
+    grades.forEach(grade => gradesMap.set(grade.activity.id, grade));
+    
+    const studentActivities = activities.map(activity => {
+      const grade = gradesMap.get(activity.id);
+      
+      let status: 'pendente' | 'concluido' | 'avaliado' = 'pendente';
+      if (grade) {
+        status = grade.score !== null ? 'avaliado' : 'concluido';
+      }
+      
+      return {
+        id: activity.id,
+        titulo: activity.title,
+        descricao: activity.description,
+        dataVencimento: activity.dueDate,
+        disciplina: activity.class.discipline.name,
+        status,
+        nota: grade?.score !== null && grade?.score !== undefined ? Number(grade.score) : null,
+        dataConclusao: grade?.gradedAt ? new Date(grade.gradedAt).toLocaleDateString('pt-BR') : null,
+      };
+    });
+
+    return studentActivities;
   }
 
   async findByStudentId(studentId: string): Promise<Activity[]> {

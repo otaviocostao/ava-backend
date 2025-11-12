@@ -8,10 +8,11 @@ import { Class } from 'src/classes/entities/class.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { StorageModule } from '../storage/storage.module';
+import { Grade } from 'src/grades/entities/grade.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Activity, ActivitySubmission, Class, User, Enrollment]),
+    TypeOrmModule.forFeature([Activity, ActivitySubmission, Class, User, Enrollment, Grade]),
     StorageModule,
   ],
   controllers: [ActivitiesController],
