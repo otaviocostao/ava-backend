@@ -12,6 +12,8 @@ import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { DetailedGradebookDto } from './dto/detailed-gradebook.dto';
 import { Class } from 'src/classes/entities/class.entity';
 import { AttendanceData, DetailedAbsence } from './dto/frequency-user.dto';
+import { PerformanceData, PerformanceMetric, RecentGrade } from './dto/performance.dto';
+import { Grade } from 'src/grades/entities/grade.entity';
 
 
 @Injectable()
@@ -25,7 +27,10 @@ export class UsersService {
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(Attendance)
-    private readonly attendanceRepository: Repository<Attendance>
+    private readonly attendanceRepository: Repository<Attendance>,
+    @InjectRepository(Grade)
+    private readonly gradeRepository: Repository<Grade>,
+
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -352,6 +357,96 @@ export class UsersService {
       disciplines,
       availableSemesters,
     };
+  }
+
+  async getStudentDesempenho(studentId: string): Promise<PerformanceData> {
+    const student = await this.userRepository.findOneBy({ id: studentId });
+    if (!student) {
+      throw new NotFoundException(`Aluno com ID "${studentId}" não encontrado.`);
+    }
+
+    const gradebookData = await this.getStudentGradebook(studentId);
+    
+    const metrics = this.calculatePerformanceMetrics(gradebookData);
+
+    const recentGrades = await this.getRecentGrades(studentId);
+    
+    const performanceByDiscipline = gradebookData.disciplinas.map(d => ({
+        disc: d.disciplina,
+        nota: d.media,
+    }));
+
+    return {
+      metrics,
+      recentGrades,
+      performanceByDiscipline,
+    };
+  }
+
+  private calculatePerformanceMetrics(gradebookData: DetailedGradebookDto): PerformanceMetric[] {
+    const { geral, disciplinas } = gradebookData;
+    
+    const allGrades = disciplinas.flatMap(d => d.notas.map(n => n.nota).filter(n => n !== null)) as number[];
+    const bestGrade = allGrades.length > 0 ? Math.max(...allGrades) : 0;
+    
+    return [
+      {
+        title: 'Média Geral',
+        value: geral.mediaGeral,
+        displayValue: geral.mediaGeral.toFixed(1),
+        description: 'Média de todas as disciplinas',
+      },
+      {
+        title: 'Melhor Nota',
+        value: bestGrade,
+        displayValue: bestGrade.toFixed(1),
+        description: 'Sua nota mais alta este semestre',
+      },
+      {
+        title: 'Disciplinas Aprovadas',
+        value: geral.disciplinasAprovadas,
+        displayValue: `${geral.disciplinasAprovadas}/${geral.totalDisciplinas}`,
+        description: `Aprovado em ${geral.disciplinasAprovadas} de ${geral.totalDisciplinas} disciplinas`,
+      },
+      {
+        title: 'Frequência',
+        value: geral.frequenciaGeral,
+        displayValue: `${geral.frequenciaGeral.toFixed(0)}%`,
+        description: 'Presença média nas aulas',
+      },
+    ];
+  }
+
+  private async getRecentGrades(studentId: string): Promise<RecentGrade[]> {
+    const latestGrades = await this.gradeRepository.find({
+        where: { enrollment: { student: { id: studentId } } },
+        relations: ['activity', 'activity.class', 'activity.class.discipline', 'activity.class.teacher'],
+        order: { gradedAt: 'DESC' },
+        take: 4,
+    });
+    
+    return latestGrades.map(grade => {
+      const formattedDate = grade.gradedAt 
+        ? new Date(grade.gradedAt).toLocaleDateString('pt-BR') 
+        : 'Data não disponível';
+
+      return {
+        discipline: grade.activity.class.discipline.name,
+        grade: Number(grade.score),
+        date: formattedDate,
+        concept: this.getConceptFromGrade(Number(grade.score)),
+        teacher: grade.activity.class.teacher?.name || null,
+        trend: 'stable',
+      };
+    });
+  }
+
+   private getConceptFromGrade(grade: number): string {
+      if (grade >= 9) return 'Excelente';
+      if (grade >= 8) return 'Ótimo';
+      if (grade >= 7) return 'Bom';
+      if (grade >= 5) return 'Regular';
+      return 'Insuficiente';
   }
   
   private mapDateToUnit(date: Date, semester: string): '1ª Unidade' | '2ª Unidade'  | 'Outra' {

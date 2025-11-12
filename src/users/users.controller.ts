@@ -90,4 +90,9 @@ export class UsersController {
   ) {
     return this.usersService.getStudentFrequency(studentId, semestre);
   }
+
+  @Get(':studentId/performance')
+  getStudentPerformance(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.usersService.getStudentDesempenho(studentId);
+  }
 }
