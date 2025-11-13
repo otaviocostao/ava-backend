@@ -325,6 +325,17 @@ export class ActivitiesService {
       relations: ['class.discipline'], 
       order: { dueDate: 'ASC' },
     });
+
+    const submissions = await this.activitySubmissionRepository.find({
+        where: {
+            student: { id: studentId },
+            activity: { id: In(activities.map(a => a.id)) },
+        },
+        relations: ['activity'],
+    });
+
+    const submissionsMap = new Map<string, ActivitySubmission>();
+    submissions.forEach(sub => submissionsMap.set(sub.activity.id, sub));
     
     const grades = await this.gradeRepository.find({
         where: {
@@ -338,11 +349,31 @@ export class ActivitiesService {
     grades.forEach(grade => gradesMap.set(grade.activity.id, grade));
     
     const studentActivities = activities.map(activity => {
+      const submission = submissionsMap.get(activity.id);
+
       const grade = gradesMap.get(activity.id);
       
-      let status: 'pendente' | 'concluido' | 'avaliado' = 'pendente';
-      if (grade) {
-        status = grade.score !== null ? 'avaliado' : 'concluido';
+      let status: 'pendente' | 'concluido' | 'avaliado';
+      let nota: number | null = null;
+      let dataConclusao: string | null = null;
+      
+      if (submission) {
+        switch (submission.status) {
+          case ActivitySubmissionStatus.SUBMITTED:
+            status = 'concluido'; 
+            break;
+          case ActivitySubmissionStatus.COMPLETED: 
+            status = 'avaliado';
+            nota = submission.grade ?? null;
+            break;
+          default:
+            status = 'pendente';
+        }
+        dataConclusao = submission.submittedAt
+          ? new Date(submission.submittedAt).toLocaleDateString('pt-BR')
+          : null;
+      } else {
+        status = 'pendente';
       }
       
       return {
@@ -352,8 +383,8 @@ export class ActivitiesService {
         dataVencimento: activity.dueDate,
         disciplina: activity.class.discipline.name,
         status,
-        nota: grade?.score !== null && grade?.score !== undefined ? Number(grade.score) : null,
-        dataConclusao: grade?.gradedAt ? new Date(grade.gradedAt).toLocaleDateString('pt-BR') : null,
+        nota,
+        dataConclusao,
       };
     });
 

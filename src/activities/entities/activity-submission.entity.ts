@@ -33,6 +33,9 @@ export class ActivitySubmission {
   })
   status: ActivitySubmissionStatus;
 
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  grade: number | null;
+
   @Column({
     name: 'file_urls',
     type: 'jsonb',
