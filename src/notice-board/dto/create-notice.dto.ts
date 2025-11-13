@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength, IsUUID } from 'class-validator';
 import { IsDateString } from 'class-validator';
 import { NoticeAudience } from 'src/common/enums/notice-audience.enum';
 
@@ -19,4 +19,8 @@ export class CreateNoticeDto {
   @IsOptional()
   @IsDateString({}, { message: 'A data de expiracao deve estar no formato ISO.' })
   expiresAt?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'O ID da turma deve ser um UUID valido.' })
+  classId?: string;
 }

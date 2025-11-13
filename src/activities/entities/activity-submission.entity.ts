@@ -41,6 +41,9 @@ export class ActivitySubmission {
   })
   fileUrls: string[] | null;
 
+  @Column({ type: 'text', nullable: true })
+  comment: string | null;
+
   @CreateDateColumn({ name: 'submitted_at', type: 'timestamp with time zone', nullable: true })
   submittedAt: Date | null;
 }

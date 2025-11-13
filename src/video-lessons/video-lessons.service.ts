@@ -54,8 +54,10 @@ export class VideoLessonsService {
     return this.videoLessonRepository.save(newVideoLesson);
   }
 
-  async findAllByClass(classId: string, requestingUserId: string): Promise<VideoLesson[]> {
-    await this.ensureUserCanViewClassContent(classId, requestingUserId);
+  async findAllByClass(classId: string, requestingUserId?: string): Promise<VideoLesson[]> {
+    if (requestingUserId) {
+      await this.ensureUserCanViewClassContent(classId, requestingUserId);
+    }
 
     return this.videoLessonRepository.find({
       where: { class: { id: classId } },
@@ -64,7 +66,7 @@ export class VideoLessonsService {
     });
   }
 
-  async findOne(id: string, requestingUserId: string): Promise<VideoLesson> {
+  async findOne(id: string, requestingUserId?: string): Promise<VideoLesson> {
     const videoLesson = await this.videoLessonRepository.findOne({
       where: { id },
       relations: ['class', 'uploadedBy'],
@@ -74,9 +76,27 @@ export class VideoLessonsService {
       throw new NotFoundException(`Videoaula com ID "${id}" não encontrada.`);
     }
 
-    await this.ensureUserCanViewClassContent(videoLesson.class.id, requestingUserId);
+    if (requestingUserId) {
+      await this.ensureUserCanViewClassContent(videoLesson.class.id, requestingUserId);
+    }
 
     return videoLesson;
+  }
+
+  async findWatchesByClass(classId: string, studentId: string) {
+    await this.ensureUserCanViewClassContent(classId, studentId);
+    const watches = await this.videoLessonWatchRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['videoLesson', 'videoLesson.class'],
+      order: { watchedAt: 'DESC' },
+    });
+    return watches
+      .filter(w => w.videoLesson?.class?.id === classId)
+      .map(w => ({
+        videoLessonId: w.videoLesson.id,
+        watchedPercentage: Number(w.watchedPercentage),
+        watchedAt: w.watchedAt,
+      }));
   }
 
   async update(

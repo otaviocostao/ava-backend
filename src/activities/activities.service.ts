@@ -935,6 +935,7 @@ export class ActivitiesService {
     activityId: string,
     studentId: string,
     files: MulterFile[],
+    comment?: string,
   ): Promise<ActivitySubmission> {
     const [activity, student] = await Promise.all([
       this.activityRepository.findOne({
@@ -1023,6 +1024,9 @@ export class ActivitiesService {
       submission.fileUrls = uploadedUrls;
       submission.status = ActivitySubmissionStatus.COMPLETED;
       submission.submittedAt = new Date();
+      if (typeof comment === 'string') {
+        submission.comment = comment;
+      }
     } else {
       submission = this.activitySubmissionRepository.create({
         activity,
@@ -1030,6 +1034,7 @@ export class ActivitiesService {
         fileUrls: uploadedUrls,
         status: ActivitySubmissionStatus.COMPLETED,
         submittedAt: new Date(),
+        comment: typeof comment === 'string' ? comment : null,
       });
     }
 
@@ -1044,8 +1049,9 @@ export class ActivitiesService {
     activityId: string,
     studentId: string,
     file: MulterFile,
+    comment?: string,
   ): Promise<ActivitySubmission> {
-    return this.uploadActivitySubmissions(activityId, studentId, [file]);
+    return this.uploadActivitySubmissions(activityId, studentId, [file], comment);
   }
 
   /**

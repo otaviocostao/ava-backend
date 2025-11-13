@@ -6,12 +6,15 @@ import { CreateNoticeDto } from './dto/create-notice.dto';
 import { UpdateNoticeDto } from './dto/update-notice.dto';
 import { NoticeAudience } from 'src/common/enums/notice-audience.enum';
 import { FindNoticesQueryDto } from './dto/find-notices.dto';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Injectable()
 export class NoticeBoardService {
   constructor(
     @InjectRepository(Notice)
     private readonly noticeRepository: Repository<Notice>,
+    @InjectRepository(Class)
+    private readonly classRepository: Repository<Class>,
   ) {}
 
   private parseOptionalDate(input?: string): Date | null {
@@ -30,9 +33,22 @@ export class NoticeBoardService {
 
   async create(createNoticeDto: CreateNoticeDto): Promise<Notice> {
     const notice = this.noticeRepository.create({
-      ...createNoticeDto,
+      title: createNoticeDto.title,
+      content: createNoticeDto.content,
+      audience: createNoticeDto.audience,
       expiresAt: this.parseOptionalDate(createNoticeDto.expiresAt),
     });
+
+    if (createNoticeDto.classId) {
+      // Validar existencia da turma
+      const classInstance = await this.classRepository.findOne({ where: { id: createNoticeDto.classId } });
+      if (!classInstance) {
+        throw new NotFoundException(`Turma com ID "${createNoticeDto.classId}" nao encontrada.`);
+      }
+      notice.class = classInstance;
+    } else {
+      notice.class = null;
+    }
 
     return this.noticeRepository.save(notice);
   }
@@ -64,6 +80,18 @@ export class NoticeBoardService {
     return this.noticeRepository
       .createQueryBuilder('notice')
       .where('notice.audience IN (:...audiences)', { audiences })
+      .andWhere('(notice.expiresAt IS NULL OR notice.expiresAt >= :now)', {
+        now: new Date().toISOString(),
+      })
+      .orderBy('notice.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async findByClassId(classId: string): Promise<Notice[]> {
+    return this.noticeRepository
+      .createQueryBuilder('notice')
+      .leftJoin('notice.class', 'class')
+      .where('class.id = :classId', { classId })
       .andWhere('(notice.expiresAt IS NULL OR notice.expiresAt >= :now)', {
         now: new Date().toISOString(),
       })

@@ -57,6 +57,12 @@ export class NoticeBoardController {
     return this.noticeBoardService.findForAudience(audience);
   }
 
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Lista avisos vinculados a uma turma especifica.' })
+  findByClassId(@Param('classId', ParseUUIDPipe) classId: string) {
+    return this.noticeBoardService.findByClassId(classId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Busca um aviso especifico pelo ID.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {

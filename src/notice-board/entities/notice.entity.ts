@@ -1,8 +1,11 @@
 import { NoticeAudience } from 'src/common/enums/notice-audience.enum';
+import { Class } from 'src/classes/entities/class.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -24,6 +27,10 @@ export class Notice {
     default: NoticeAudience.ALL,
   })
   audience: NoticeAudience;
+
+  @ManyToOne(() => Class, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'class_id' })
+  class?: Class | null;
 
   @Column({ type: 'timestamp with time zone', nullable: true })
   expiresAt: Date | null;

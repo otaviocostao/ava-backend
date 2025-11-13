@@ -22,17 +22,23 @@ export class VideoLessonsController {
   @ApiOperation({ summary: 'Lista todas as videoaulas disponíveis para a turma informada.' })
   findAllByClass(
     @Param('classId', ParseUUIDPipe) classId: string,
-    @Req() req: any,
   ) {
-    const requestingUserId = req.user.id;
-    return this.videoLessonsService.findAllByClass(classId, requestingUserId);
+    return this.videoLessonsService.findAllByClass(classId);
+  }
+
+  @Get('class/:classId/watches')
+  @ApiOperation({ summary: 'Lista o status de visualização das vídeo-aulas da turma para um aluno.' })
+  findWatchesByClass(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Query('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.videoLessonsService.findWatchesByClass(classId, studentId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtém detalhes de uma videoaula específica.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
-    const requestingUserId = req.user.id;
-    return this.videoLessonsService.findOne(id, requestingUserId);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.videoLessonsService.findOne(id);
   }
 
   @Patch(':id')

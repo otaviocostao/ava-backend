@@ -193,14 +193,14 @@ export class ActivitiesController {
   @ApiConsumes('multipart/form-data')
   @ApiTags('Activities - Submissões')
   @ApiOperation({
-    summary: 'Faz upload de submissões de atividade do aluno (múltiplos arquivos) e marca como concluída.',
+    summary: 'Faz upload de submissões de atividade do aluno (múltiplos arquivos) com comentário opcional e marca como concluída.',
     description:
-      'O classId é obtido automaticamente através da relação da atividade com a classe. Os arquivos serão salvos no path: activities/{classId}/{activityId}/{studentId}/{arquivo}. Aceita até 10 arquivos por requisição. A atividade é automaticamente marcada como concluída após o upload.',
+      'O classId é obtido automaticamente através da relação da atividade com a classe. Os arquivos serão salvos no path: activities/{classId}/{activityId}/{studentId}/{arquivo}. Aceita até 10 arquivos por requisição. A atividade é automaticamente marcada como concluída após o upload. É possível enviar um comentário textual opcional.',
   })
   @ApiParam({ name: 'studentId', description: 'ID do aluno', type: String })
   @ApiParam({ name: 'activityId', description: 'ID da atividade (o classId é obtido automaticamente através da relação)', type: String })
   @ApiBody({
-    description: 'Arquivos da submissão da atividade (múltiplos arquivos permitidos)',
+    description: 'Arquivos da submissão da atividade (múltiplos arquivos permitidos) e comentário opcional',
     schema: {
       type: 'object',
       properties: {
@@ -212,6 +212,10 @@ export class ActivitiesController {
           },
           description: 'Selecione múltiplos arquivos para upload (até 10 arquivos)',
         },
+        comment: {
+          type: 'string',
+          description: 'Comentário opcional do aluno sobre a submissão',
+        },
       },
       required: ['files'],
     },
@@ -220,11 +224,12 @@ export class ActivitiesController {
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Param('activityId', ParseUUIDPipe) activityId: string,
     @UploadedFiles() files: MulterFile[],
+    @Body('comment') comment?: string,
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('Nenhum arquivo fornecido.');
     }
-    return this.activitiesService.uploadActivitySubmissions(activityId, studentId, files);
+    return this.activitiesService.uploadActivitySubmissions(activityId, studentId, files, comment);
   }
 
   @Delete('submissions/:submissionId/files')
