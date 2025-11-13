@@ -1,6 +1,7 @@
 import { Class } from "src/classes/entities/class.entity";
 import { ForumPost } from "src/forum-posts/entities/forum-post.entity";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { User } from "src/users/entities/user.entity";
 
 @Entity('forums')
 export class Forum {
@@ -19,4 +20,11 @@ export class Forum {
 
     @OneToMany(() => ForumPost, (post) => post.forum)
     posts: ForumPost[];
+
+    @CreateDateColumn({ name: 'created_at', type: 'timestamp with time zone' })
+    createdAt: Date;
+
+    @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'created_by_id' })
+    createdBy: User;
 }

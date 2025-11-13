@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Forum } from './entities/forum.entity';
 import { Repository } from 'typeorm';
 import { Class } from 'src/classes/entities/class.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class ForumsService {
@@ -14,26 +15,38 @@ export class ForumsService {
     
     @InjectRepository(Class)
     private readonly classRepository: Repository<Class>,
+
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ){}
 
   async create(createForumDto: CreateForumDto) : Promise<Forum> {
-    const { classId } = createForumDto;
+    const { classId, userId } = createForumDto;
 
     const classInstance = await this.classRepository.findOneBy({ id: classId });
     if (!classInstance) {
       throw new NotFoundException(`Turma com ID "${classId}" não encontrada.`);
     }
 
+    const creator = await this.userRepository.findOneBy({ id: userId });
+    if (!creator) {
+      throw new NotFoundException(`Usuário com ID "${userId}" não encontrado.`);
+    }
+
     const newForum = this.forumRepository.create({
       ...createForumDto,
       class: { id: classId },
+      createdBy: creator,
     });
 
     return this.forumRepository.save(newForum);
   }
 
   findAll() {
-    return this.forumRepository.find();
+    return this.forumRepository.find({
+      order: { createdAt: 'DESC' },
+      relations: ['createdBy'],
+    });
   }
 
   async findOne(id: string) : Promise<Forum> {
@@ -68,7 +81,11 @@ export class ForumsService {
   }
 
   async findByClassId(classId: string): Promise<Forum[]> {
-    const forums = await this.forumRepository.find({ where: { class: { id: classId } } });
+    const forums = await this.forumRepository.find({
+      where: { class: { id: classId } },
+      order: { createdAt: 'DESC' },
+      relations: ['createdBy'],
+    });
 
     if (!forums) {
       throw new NotFoundException(`Fóruns da turma com ID "${classId}" não encontrados.`);
