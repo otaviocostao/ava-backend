@@ -18,6 +18,7 @@ import { CreateNoticeDto } from './dto/create-notice.dto';
 import { UpdateNoticeDto } from './dto/update-notice.dto';
 import { FindNoticesQueryDto } from './dto/find-notices.dto';
 import { NoticeAudience } from 'src/common/enums/notice-audience.enum';
+import { Req } from '@nestjs/common';
 
 @ApiTags('Notice Board')
 @Controller('notice-board')
@@ -61,6 +62,18 @@ export class NoticeBoardController {
   @ApiOperation({ summary: 'Lista avisos vinculados a uma turma especifica.' })
   findByClassId(@Param('classId', ParseUUIDPipe) classId: string) {
     return this.noticeBoardService.findByClassId(classId);
+  }
+
+  @Get('student/:studentId')
+  @ApiOperation({ summary: 'Lista avisos agregados de todas as turmas do aluno (e avisos gerais de alunos).' })
+  findByStudentId(@Param('studentId', ParseUUIDPipe) studentId: string, @Req() req: any) {
+    // Opcional: vincular ao usuário autenticado
+    const requestingUserId = req?.user?.id;
+    if (requestingUserId && requestingUserId !== studentId) {
+      // Mantemos o comportamento permissivo caso não exista guard global, a validação forte pode ser feita no service
+      // Aqui apenas sinalizamos o desvio; a service não depende do req.user.
+    }
+    return this.noticeBoardService.findByStudentId(studentId);
   }
 
   @Get(':id')

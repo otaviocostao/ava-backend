@@ -7,6 +7,7 @@ import { UpdateNoticeDto } from './dto/update-notice.dto';
 import { NoticeAudience } from 'src/common/enums/notice-audience.enum';
 import { FindNoticesQueryDto } from './dto/find-notices.dto';
 import { Class } from 'src/classes/entities/class.entity';
+import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 
 @Injectable()
 export class NoticeBoardService {
@@ -15,6 +16,8 @@ export class NoticeBoardService {
     private readonly noticeRepository: Repository<Notice>,
     @InjectRepository(Class)
     private readonly classRepository: Repository<Class>,
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>,
   ) {}
 
   private parseOptionalDate(input?: string): Date | null {
@@ -92,6 +95,39 @@ export class NoticeBoardService {
       .createQueryBuilder('notice')
       .leftJoin('notice.class', 'class')
       .where('class.id = :classId', { classId })
+      .andWhere('(notice.expiresAt IS NULL OR notice.expiresAt >= :now)', {
+        now: new Date().toISOString(),
+      })
+      .orderBy('notice.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async findByStudentId(studentId: string): Promise<Notice[]> {
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['class'],
+    });
+    const classIds = enrollments
+      .map((e) => e.class?.id)
+      .filter((id): id is string => Boolean(id));
+
+    if (classIds.length === 0) {
+      return this.noticeRepository
+        .createQueryBuilder('notice')
+        .where('(notice.expiresAt IS NULL OR notice.expiresAt >= :now)', {
+          now: new Date().toISOString(),
+        })
+        .andWhere('notice.class_id IS NULL')
+        .andWhere('notice.audience IN (:...audiences)', { audiences: ['all', 'student'] })
+        .orderBy('notice.createdAt', 'DESC')
+        .getMany();
+    }
+
+    return this.noticeRepository
+      .createQueryBuilder('notice')
+      .leftJoin('notice.class', 'class')
+      .where('(class.id IN (:...classIds) OR notice.class_id IS NULL)', { classIds })
+      .andWhere('notice.audience IN (:...audiences)', { audiences: ['all', 'student'] })
       .andWhere('(notice.expiresAt IS NULL OR notice.expiresAt >= :now)', {
         now: new Date().toISOString(),
       })
