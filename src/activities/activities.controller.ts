@@ -74,7 +74,7 @@ export class ActivitiesController {
   @ApiTags('Activities - Filtros')
   @ApiOperation({ summary: 'Lista todas as atividades do aluno filtradas por studentId.' })
   findByStudentId(@Param('studentId', ParseUUIDPipe) studentId: string) {
-    return this.activitiesService.findByStudentId(studentId);
+    return this.activitiesService.findActivitiesByStudent(studentId);
   }
 
   @Get('class/:classId')
