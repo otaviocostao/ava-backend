@@ -963,11 +963,23 @@ export class ActivitiesService {
   ): Promise<Activity> {
     const activity = await this.activityRepository.findOne({
       where: { id: activityId },
-      relations: ['class', 'class.teacher'],
+      relations: ['class'],
     });
 
     if (!activity) {
       throw new NotFoundException(`Atividade com ID "${activityId}" nao encontrada.`);
+    }
+
+    // Busca a classe diretamente para garantir que temos o teacher_id
+    // Usa select para garantir que temos o teacher_id mesmo se a relação não carregar
+    const classEntity = await this.classRepository
+      .createQueryBuilder('class')
+      .leftJoinAndSelect('class.teacher', 'teacher')
+      .where('class.id = :classId', { classId: activity.class.id })
+      .getOne();
+
+    if (!classEntity) {
+      throw new NotFoundException(`Turma com ID "${activity.class.id}" nao encontrada.`);
     }
 
     const teacher = await this.userRepository.findOne({
@@ -980,24 +992,21 @@ export class ActivitiesService {
     }
 
     const isTeacherRole = teacher.roles.some((role) => role.name === 'teacher');
-    if (!isTeacherRole) {
-      throw new ForbiddenException('Apenas professores podem remover anexos.');
+    const isAdminRole = teacher.roles.some((role) => role.name === 'admin');
+    
+    if (!isTeacherRole && !isAdminRole) {
+      throw new ForbiddenException('Apenas professores ou administradores podem remover anexos.');
     }
 
-    // Valida permissão
-    if (activity.class.teacher?.id !== teacherId) {
-      const enrollment = await this.enrollmentRepository.findOne({
-        where: {
-          class: { id: activity.class.id },
-          student: { id: teacherId },
-        },
-      });
-
-      if (!enrollment) {
-        throw new ForbiddenException(
-          'Voce nao tem permissao para remover anexos desta atividade.',
-        );
-      }
+    // Valida permissão: apenas o professor da turma ou admin pode remover anexos
+    // Tenta obter o teacher_id da relação ou diretamente da classe
+    const classTeacherId = classEntity.teacher?.id || (classEntity as any).teacher_id;
+    const isClassTeacher = classTeacherId === teacherId;
+    
+    if (!isClassTeacher && !isAdminRole) {
+      throw new ForbiddenException(
+        'Voce nao tem permissao para remover anexos desta atividade.',
+      );
     }
 
     // Verifica se o anexo existe na lista

@@ -392,7 +392,7 @@ async function createMaterials(dataSource: DataSource, classes: Class[], users: 
     {
       class: classes[0],
       title: 'Slides - Introdução à Programação',
-      fileUrl: '/materials/slides-prog1-intro.pdf',
+      fileUrl: ['/materials/slides-prog1-intro.pdf'],
       description: 'Apresentação sobre conceitos básicos de programação.',
       uploadedBy: users[0], // Prof. João Silva
       uploadedAt: new Date(),
@@ -400,7 +400,7 @@ async function createMaterials(dataSource: DataSource, classes: Class[], users: 
     {
       class: classes[0],
       title: 'Exercícios Resolvidos - Capítulo 1',
-      fileUrl: '/materials/exercicios-cap1.pdf',
+      fileUrl: ['/materials/exercicios-cap1.pdf'],
       description: 'Exercícios resolvidos do primeiro capítulo.',
       uploadedBy: users[0], // Prof. João Silva
       uploadedAt: new Date(),
@@ -408,7 +408,7 @@ async function createMaterials(dataSource: DataSource, classes: Class[], users: 
     {
       class: classes[1],
       title: 'Material de Estudo - Estruturas de Dados',
-      fileUrl: '/materials/estruturas-dados.pdf',
+      fileUrl: ['/materials/estruturas-dados.pdf'],
       description: 'Material completo sobre estruturas de dados.',
       uploadedBy: users[1], // Prof. Maria Santos
       uploadedAt: new Date(),
@@ -416,7 +416,7 @@ async function createMaterials(dataSource: DataSource, classes: Class[], users: 
     {
       class: classes[2],
       title: 'Tutorial HTML/CSS',
-      fileUrl: '/materials/tutorial-html-css.pdf',
+      fileUrl: ['/materials/tutorial-html-css.pdf'],
       description: 'Tutorial completo de HTML e CSS.',
       uploadedBy: users[2], // Prof. Pedro Costa
       uploadedAt: new Date(),
@@ -424,7 +424,7 @@ async function createMaterials(dataSource: DataSource, classes: Class[], users: 
     {
       class: classes[3],
       title: 'Slides - Estruturas Condicionais',
-      fileUrl: '/materials/slides-condicionais.pdf',
+      fileUrl: ['/materials/slides-condicionais.pdf'],
       description: 'Apresentação sobre estruturas condicionais.',
       uploadedBy: users[0], // Prof. João Silva
       uploadedAt: new Date(),

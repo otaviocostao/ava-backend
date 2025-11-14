@@ -19,20 +19,22 @@ export class StorageService {
   }
 
   /**
-   * Faz upload de um arquivo para o bucket de atividades
+   * Faz upload de um arquivo para um bucket específico
+   * @param bucket Nome do bucket
+   * @param path Caminho completo no bucket (ex: class_id/material_id/teacher_id/filename)
    * @param file Buffer do arquivo
-   * @param path Caminho completo no bucket (ex: class_id/activity_id/teacher/user_id/filename)
    * @param contentType Tipo MIME do arquivo
    * @returns URL pública do arquivo
    */
-  async uploadFile(
-    file: Buffer,
+  async uploadFileTo(
+    bucket: string,
     path: string,
+    file: Buffer,
     contentType: string = 'application/octet-stream',
   ): Promise<string> {
     try {
       const { data, error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .upload(path, file, {
           contentType,
           upsert: true,
@@ -43,7 +45,7 @@ export class StorageService {
       }
 
       const { data: urlData } = this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .getPublicUrl(data.path);
 
       return urlData.publicUrl;
@@ -56,13 +58,29 @@ export class StorageService {
   }
 
   /**
-   * Remove um arquivo do bucket
+   * Faz upload de um arquivo para o bucket de atividades (compat)
+   * @param file Buffer do arquivo
+   * @param path Caminho completo no bucket (ex: class_id/activity_id/teacher/user_id/filename)
+   * @param contentType Tipo MIME do arquivo
+   * @returns URL pública do arquivo
+   */
+  async uploadFile(
+    file: Buffer,
+    path: string,
+    contentType: string = 'application/octet-stream',
+  ): Promise<string> {
+    return this.uploadFileTo(this.bucketName, path, file, contentType);
+  }
+
+  /**
+   * Remove um arquivo de um bucket específico
+   * @param bucket Nome do bucket
    * @param path Caminho completo do arquivo no bucket
    */
-  async deleteFile(path: string): Promise<void> {
+  async deleteFileFrom(bucket: string, path: string): Promise<void> {
     try {
       const { error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .remove([path]);
 
       if (error) {
@@ -77,17 +95,26 @@ export class StorageService {
   }
 
   /**
-   * Remove múltiplos arquivos do bucket
+   * Remove um arquivo do bucket (compat)
+   * @param path Caminho completo do arquivo no bucket
+   */
+  async deleteFile(path: string): Promise<void> {
+    return this.deleteFileFrom(this.bucketName, path);
+  }
+
+  /**
+   * Remove múltiplos arquivos de um bucket específico
+   * @param bucket Nome do bucket
    * @param paths Array de caminhos completos dos arquivos
    */
-  async deleteFiles(paths: string[]): Promise<void> {
+  async deleteFilesFrom(bucket: string, paths: string[]): Promise<void> {
     if (paths.length === 0) {
       return;
     }
 
     try {
       const { error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .remove(paths);
 
       if (error) {
@@ -102,25 +129,44 @@ export class StorageService {
   }
 
   /**
-   * Obtém a URL pública de um arquivo
+   * Remove múltiplos arquivos do bucket (compat)
+   * @param paths Array de caminhos completos dos arquivos
+   */
+  async deleteFiles(paths: string[]): Promise<void> {
+    return this.deleteFilesFrom(this.bucketName, paths);
+  }
+
+  /**
+   * Obtém a URL pública de um arquivo de um bucket específico
+   * @param bucket Nome do bucket
    * @param path Caminho completo do arquivo no bucket
    * @returns URL pública do arquivo
    */
-  getPublicUrl(path: string): string {
-    const { data } = this.supabase.storage.from(this.bucketName).getPublicUrl(path);
+  getPublicUrlFrom(bucket: string, path: string): string {
+    const { data } = this.supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
   }
 
   /**
-   * Extrai o caminho do arquivo a partir de uma URL pública do Supabase
+   * Obtém a URL pública de um arquivo (compat)
+   * @param path Caminho completo do arquivo no bucket
+   * @returns URL pública do arquivo
+   */
+  getPublicUrl(path: string): string {
+    return this.getPublicUrlFrom(this.bucketName, path);
+  }
+
+  /**
+   * Extrai o caminho do arquivo a partir de uma URL pública do Supabase para um bucket específico
    * @param url URL pública do arquivo
+   * @param bucket Nome do bucket
    * @returns Caminho relativo do arquivo no bucket
    */
-  extractPathFromUrl(url: string): string | null {
+  extractPathFromUrl(url: string, bucket: string = this.bucketName): string | null {
     try {
       const urlObj = new URL(url);
       const pathParts = urlObj.pathname.split('/');
-      const bucketIndex = pathParts.findIndex((part) => part === this.bucketName);
+      const bucketIndex = pathParts.findIndex((part) => part === bucket);
       
       if (bucketIndex === -1 || bucketIndex === pathParts.length - 1) {
         return null;
@@ -130,6 +176,15 @@ export class StorageService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Extrai o caminho do arquivo a partir de uma URL pública (compat com bucket padrão)
+   * @param url URL pública do arquivo
+   * @returns Caminho relativo do arquivo no bucket
+   */
+  extractDefaultBucketPathFromUrl(url: string): string | null {
+    return this.extractPathFromUrl(url, this.bucketName);
   }
 
   /**
@@ -165,17 +220,18 @@ export class StorageService {
   }
 
   /**
-   * Faz download de um arquivo do bucket
+   * Faz download de um arquivo de um bucket específico
+   * @param bucket Nome do bucket
    * @param path Caminho completo do arquivo no bucket
    * @returns Buffer do arquivo e nome do arquivo
    */
-  async downloadFile(path: string): Promise<{ buffer: Buffer; fileName: string }> {
+  async downloadFileFrom(bucket: string, path: string): Promise<{ buffer: Buffer; fileName: string }> {
     try {
       console.log('[DEBUG StorageService] Tentando fazer download do path:', path);
-      console.log('[DEBUG StorageService] Bucket:', this.bucketName);
+      console.log('[DEBUG StorageService] Bucket:', bucket);
       
       const { data, error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .download(path);
 
       console.log('[DEBUG StorageService] Download resultado - data:', !!data, 'error:', error);
@@ -212,6 +268,15 @@ export class StorageService {
       const errorMessage = error?.message || error?.toString() || JSON.stringify(error) || 'Erro desconhecido';
       throw new InternalServerErrorException(`Erro ao fazer download do arquivo: ${errorMessage}`);
     }
+  }
+
+  /**
+   * Faz download de um arquivo do bucket (compat)
+   * @param path Caminho completo do arquivo no bucket
+   * @returns Buffer do arquivo e nome do arquivo
+   */
+  async downloadFile(path: string): Promise<{ buffer: Buffer; fileName: string }> {
+    return this.downloadFileFrom(this.bucketName, path);
   }
 }
 

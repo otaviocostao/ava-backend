@@ -14,10 +14,11 @@ export class Material {
     @Column({ length: 255, nullable: false })
     title: string;
 
-    @Column({ length: 255, nullable: true })
-    fileUrl: string;
+    @Column({ name: 'fileUrl', type: 'jsonb', nullable: true })
+    fileUrl: string[] | null;
 
-    description: string;
+    @Column({ type: 'text', nullable: true })
+    description: string | null;
 
     @ManyToOne(() => User, { nullable: false, onDelete: 'SET NULL' })
     uploadedBy: User;
