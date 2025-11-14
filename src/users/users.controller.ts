@@ -28,9 +28,16 @@ export class UsersController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista todos os usuários cadastrados.' })
-  findAll() {
-    return this.usersService.findAll();
+  @ApiOperation({ summary: 'Lista todos os usuários cadastrados com paginação e filtros.' })
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('role') role?: string,
+    @Query('search') search?: string,
+  ) {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 10;
+    return this.usersService.findAll(pageNumber, limitNumber, role, search);
   }
 
   @Get(':id')

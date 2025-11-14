@@ -26,6 +26,18 @@ export class User {
     @Column({ name: 'password_hash', select: false })
     password: string;
 
+    @Column({ name: 'is_active', type: 'boolean', default: true })
+    isActive: boolean;
+
+    @Column({ nullable: true })
+    usuario?: string;
+
+    @Column({ nullable: true })
+    telefone?: string;
+
+    @Column({ nullable: true })
+    cpf?: string;
+
     @CreateDateColumn({name: 'create_at', type: 'timestamp with time zone'})
     createdAt: Date;
     

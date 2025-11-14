@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, IsStrongPassword, MinLength } from "class-validator";
+import { IsEmail, IsNotEmpty, IsString, IsStrongPassword, MinLength, IsOptional, IsBoolean } from "class-validator";
 
 export class CreateUserDto {    
     @IsString()
@@ -12,4 +12,20 @@ export class CreateUserDto {
     @IsStrongPassword()
     @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres.' })
     password: string;
+
+    @IsOptional()
+    @IsString()
+    usuario?: string;
+
+    @IsOptional()
+    @IsString()
+    telefone?: string;
+
+    @IsOptional()
+    @IsString()
+    cpf?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    isActive?: boolean;
 }

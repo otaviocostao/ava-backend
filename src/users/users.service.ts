@@ -51,12 +51,47 @@ export class UsersService {
     return savedUser;
   }
 
-  findAll(): Promise<User[]> {
-    return this.userRepository.find();
+  async findAll(page: number = 1, limit: number = 10, role?: string, search?: string): Promise<{ data: User[]; total: number; page: number; limit: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+    
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'role')
+      .orderBy('user.createdAt', 'DESC');
+
+    // Filtro por role
+    if (role) {
+      qb.andWhere('role.name = :roleName', { roleName: role });
+    }
+
+    // Filtro por busca (nome ou email)
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search)',
+        { search: searchTerm }
+      );
+    }
+
+    // Aplicar paginação
+    qb.skip(skip).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({ 
+      where: { id },
+      relations: ['roles'],
+    });
     if (!user) {
       throw new NotFoundException(`Usuário com o ID '${id}' não encontrado.`);
     }
