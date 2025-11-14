@@ -7,10 +7,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Class } from 'src/classes/entities/class.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { User } from 'src/users/entities/user.entity';
+import { StorageModule } from 'src/storage/storage.module';
+import { PassportModule } from '@nestjs/passport';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([VideoLesson, VideoLessonWatch, Class, Enrollment, User]),
+    StorageModule,
+    PassportModule,
   ],
   controllers: [VideoLessonsController],
   providers: [VideoLessonsService],

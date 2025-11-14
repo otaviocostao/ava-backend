@@ -278,6 +278,83 @@ export class StorageService {
   async downloadFile(path: string): Promise<{ buffer: Buffer; fileName: string }> {
     return this.downloadFileFrom(this.bucketName, path);
   }
+
+  /**
+   * Gera uma URL pré-assinada para upload (PUT) de um arquivo
+   * Nota: O Supabase Storage não suporta presigned URLs para upload como o S3.
+   * Esta função retorna uma URL que pode ser usada para upload via API REST do Supabase.
+   * O cliente deve fazer POST para esta URL com o arquivo no body.
+   * @param bucket Nome do bucket
+   * @param path Caminho completo do arquivo no bucket
+   * @param expiresIn Segundos até a URL expirar (padrão: 600 = 10 minutos) - não usado no Supabase
+   * @param contentType Tipo MIME do arquivo (opcional)
+   * @returns URL para upload (endpoint da API do Supabase)
+   */
+  async createPresignedUploadUrl(
+    bucket: string,
+    path: string,
+    expiresIn: number = 600,
+    contentType?: string,
+  ): Promise<string> {
+    try {
+      // O Supabase Storage não tem presigned URLs para upload como o S3
+      // Retornamos a URL da API REST do Supabase que permite upload
+      // O upload será feito via POST/PUT para esta URL com autenticação
+      const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+      if (!supabaseUrl) {
+        throw new InternalServerErrorException('SUPABASE_URL não configurada');
+      }
+
+      // URL da API REST do Supabase Storage para upload
+      // Formato: {SUPABASE_URL}/storage/v1/object/{bucket}/{path}
+      const encodedPath = encodeURIComponent(path);
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`;
+      
+      // Nota: O cliente precisará incluir o header Authorization com o token
+      // Para video-aulas, vamos fazer upload via backend mesmo
+      // Esta URL é apenas informativa - o upload real será feito pelo backend
+      return uploadUrl;
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Erro ao criar URL de upload: ${error.message}`);
+    }
+  }
+
+  /**
+   * Gera uma URL pré-assinada para download/visualização (GET) de um arquivo
+   * @param bucket Nome do bucket
+   * @param path Caminho completo do arquivo no bucket
+   * @param expiresIn Segundos até a URL expirar (padrão: 600 = 10 minutos)
+   * @param download Se true, força download; se false, tenta visualizar inline
+   * @returns URL pré-assinada para download/visualização
+   */
+  async createPresignedDownloadUrl(
+    bucket: string,
+    path: string,
+    expiresIn: number = 600,
+    download: boolean = false,
+  ): Promise<string> {
+    try {
+      const { data, error } = await this.supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, expiresIn, {
+          download,
+        });
+
+      if (error) {
+        throw new InternalServerErrorException(`Erro ao criar URL de download: ${error.message}`);
+      }
+
+      return data.signedUrl;
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Erro ao criar URL pré-assinada de download: ${error.message}`);
+    }
+  }
 }
 
 
