@@ -177,4 +177,40 @@ export class AttendancesService {
         })),
     }));
   }
+
+  // Criar frequências em lote
+  async createBatch(attendances: Array<{ enrollment_id: string; student_id: string; date: string; present: boolean }>): Promise<Attendance[]> {
+    const createdAttendances: Attendance[] = [];
+
+    for (const attendanceData of attendances) {
+      const enrollment = await this.ensureEnrollmentExists(attendanceData.enrollment_id);
+
+      // Verificar se já existe frequência para esta matrícula e data
+      const existingAttendance = await this.attendanceRepository.findOne({
+        where: {
+          enrollment: { id: attendanceData.enrollment_id },
+          date: attendanceData.date,
+        },
+      });
+
+      if (existingAttendance) {
+        // Atualizar existente
+        existingAttendance.present = attendanceData.present;
+        const updated = await this.attendanceRepository.save(existingAttendance);
+        createdAttendances.push(updated);
+      } else {
+        // Criar novo
+        const attendance = this.attendanceRepository.create({
+          date: attendanceData.date,
+          present: attendanceData.present,
+          enrollment,
+          student: enrollment.student,
+        });
+        const saved = await this.attendanceRepository.save(attendance);
+        createdAttendances.push(saved);
+      }
+    }
+
+    return createdAttendances;
+  }
 }

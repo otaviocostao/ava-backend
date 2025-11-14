@@ -4,6 +4,7 @@ import { AttendancesService } from './attendances.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { AttendanceTableRowDto } from './dto/attendance-table.dto';
+import { CreateBatchAttendanceDto } from './dto/create-batch-attendance.dto';
 
 @ApiTags('Attendances')
 @Controller('attendances')
@@ -15,6 +16,13 @@ export class AttendancesController {
   @ApiOperation({ summary: 'Registra a frequencia de um aluno em uma aula especifica.' })
   create(@Body() createAttendanceDto: CreateAttendanceDto) {
     return this.attendancesService.create(createAttendanceDto);
+  }
+
+  @Post('batch')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Registra frequências de múltiplos alunos em lote. Atualiza se já existir.' })
+  createBatch(@Body() createBatchAttendanceDto: CreateBatchAttendanceDto) {
+    return this.attendancesService.createBatch(createBatchAttendanceDto.attendances);
   }
 
   @Get()

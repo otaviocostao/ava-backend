@@ -30,6 +30,12 @@ export class ClassesController {
     return this.classesService.findByTeacher(teacherId);
   }
 
+  @Get('teacher/:teacherId/details')
+  @ApiOperation({ summary: 'Lista todas as turmas do professor com dados completos (alunos, horários, frequências).' })
+  findByTeacherWithDetails(@Param('teacherId', ParseUUIDPipe) teacherId: string) {
+    return this.classesService.findByTeacherWithDetails(teacherId);
+  }
+
  
   @Get(':id')
   @ApiOperation({ summary: 'Busca os detalhes completos de uma turma pelo ID.' })
