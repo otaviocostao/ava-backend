@@ -14,6 +14,7 @@ import { Class } from 'src/classes/entities/class.entity';
 import { AttendanceData, DetailedAbsence } from './dto/frequency-user.dto';
 import { PerformanceData, PerformanceMetric, RecentGrade } from './dto/performance.dto';
 import { Grade } from 'src/grades/entities/grade.entity';
+import { Department } from 'src/departments/entities/department.entity';
 
 
 @Injectable()
@@ -511,5 +512,21 @@ export class UsersService {
     }
 
     return currentDate > semesterEndDate;
+  }
+
+  async getUserDepartments(userId: string): Promise<Department[]> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.departments', 'departments')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException(`Usuário com o ID '${userId}' não encontrado.`);
+    }
+
+    // TypeScript pode não inferir a propriedade departments, então usamos type assertion
+    const userWithDepartments = user as User & { departments?: Department[] };
+    return userWithDepartments.departments || [];
   }
 }  

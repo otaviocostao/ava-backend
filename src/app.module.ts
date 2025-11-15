@@ -32,6 +32,7 @@ import { LiveSessionsModule } from './live-sessions/live-sessions.module';
 import { StorageModule } from './storage/storage.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatsModule } from './chats/chats.module';
+import { DatabaseInitService } from './database/database-init.service';
 
 @Module({
   imports: [
@@ -88,6 +89,6 @@ import { ChatsModule } from './chats/chats.module';
     UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule
   ],
   controllers: [AppController],
-  providers: [AppService, AppContextService, LiveClassGateway],
+  providers: [AppService, AppContextService, LiveClassGateway, DatabaseInitService],
 })
 export class AppModule {}

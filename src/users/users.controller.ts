@@ -102,4 +102,10 @@ export class UsersController {
   getStudentPerformance(@Param('studentId', ParseUUIDPipe) studentId: string) {
     return this.usersService.getStudentDesempenho(studentId);
   }
+
+  @Get(':id/departments')
+  @ApiOperation({ summary: 'Lista todos os departamentos em que um usuário (professor) está vinculado.' })
+  getUserDepartments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getUserDepartments(id);
+  }
 }
