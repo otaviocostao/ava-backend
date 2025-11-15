@@ -1,6 +1,6 @@
 import { Course } from "src/courses/entities/course.entity";
 import { User } from "src/users/entities/user.entity";
-import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, JoinTable, ManyToMany, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('departments')
 export class Department {
@@ -19,4 +19,12 @@ export class Department {
 
     @OneToMany(() => Course, (course) => course.department)
     courses: Course[];
+
+    @ManyToMany(() => User, { cascade: false })
+    @JoinTable({
+        name: 'department_teachers',
+        joinColumn: { name: 'department_id', referencedColumnName: 'id' },
+        inverseJoinColumn: { name: 'user_id', referencedColumnName: 'id' },
+    })
+    teachers: User[];
 }
