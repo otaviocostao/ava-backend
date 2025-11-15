@@ -33,6 +33,7 @@ import { StorageModule } from './storage/storage.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatsModule } from './chats/chats.module';
 import { DatabaseInitService } from './database/database-init.service';
+import { StudentCoursesModule } from './student-courses/student-courses.module';
 
 @Module({
   imports: [
@@ -86,7 +87,7 @@ import { DatabaseInitService } from './database/database-init.service';
         };
       },
     }),
-    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule
+    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule, StudentCoursesModule
   ],
   controllers: [AppController],
   providers: [AppService, AppContextService, LiveClassGateway, DatabaseInitService],

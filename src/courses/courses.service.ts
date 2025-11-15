@@ -4,8 +4,9 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Course } from './entities/course.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Department } from 'src/departments/entities/department.entity';
+import { StudentCourse } from 'src/student-courses/entities/student-course.entity';
 
 @Injectable()
 export class CoursesService {
@@ -17,17 +18,30 @@ export class CoursesService {
     private readonly disciplineRepository: Repository<Discipline>,
     @InjectRepository(Department)
     private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(StudentCourse)
+    private readonly studentCourseRepository: Repository<StudentCourse>,
   ) {}
 
   // Criar novo Curso
   async create(createCourseDto: CreateCourseDto) {
-    const existingCourse = await this.courseRepository.findOneBy({
-      name: createCourseDto.name,
-    })
+    const normalizedCode = createCourseDto.code.toUpperCase();
 
-    if(existingCourse){
-      throw new ConflictException('Este Curso já foi criado.')
+    const existingByName = await this.courseRepository.findOneBy({
+      name: createCourseDto.name,
+    });
+
+    if (existingByName) {
+      throw new ConflictException('Já existe um curso com este nome.');
     }
+
+    const existingByCode = await this.courseRepository.findOneBy({
+      code: normalizedCode,
+    });
+
+    if (existingByCode) {
+      throw new ConflictException('Já existe um curso com este código.');
+    }
+
     // Validar e carregar Department obrigatório
     const department = await this.departmentRepository.findOne({ where: { id: createCourseDto.departmentId } });
     if (!department) {
@@ -36,18 +50,74 @@ export class CoursesService {
 
     const course = this.courseRepository.create({
       name: createCourseDto.name,
+      code: normalizedCode,
+      totalHours: createCourseDto.totalHours,
+      durationSemesters: createCourseDto.durationSemesters,
+      description: createCourseDto.description,
       status: createCourseDto.status,
       department,
+      studentsCount: 0,
+      classesCount: 0,
     });
 
     return await this.courseRepository.save(course);
   }
 
-  // Buscar todas as Curso
-  findAll() : Promise<Course[]> {
-    return this.courseRepository.find({
+  // Buscar Cursos (opcionalmente filtrando por departamento) com contagens dinâmicas
+  async findAll(departmentId?: string) : Promise<Course[]> {
+    const where = departmentId ? { department: { id: departmentId } } : {};
+    const courses = await this.courseRepository.find({
+      where,
       relations: ['disciplines'],
     });
+
+    if (courses.length === 0) return courses;
+
+    const ids = courses.map(c => c.id);
+
+    // Alunos por curso (student_courses)
+    const srows = await this.studentCourseRepository.createQueryBuilder('sc')
+      .select('sc.course_id', 'courseId')
+      .addSelect('COUNT(sc.id)', 'count')
+      .where('sc.course_id IN (:...ids)', { ids })
+      .groupBy('sc.course_id')
+      .getRawMany<{ courseId: string; count: string }>();
+
+    const countStudentsMap = Object.fromEntries(srows.map(r => [r.courseId, Number(r.count || 0)]));
+
+    // Disciplinas por curso (courses_disciplines)
+    const drows = await this.courseRepository.manager
+      .createQueryBuilder()
+      .select('cd.course_id', 'courseId')
+      .addSelect('COUNT(cd.discipline_id)', 'count')
+      .from('courses_disciplines', 'cd')
+      .where('cd.course_id IN (:...ids)', { ids })
+      .groupBy('cd.course_id')
+      .getRawMany<{ courseId: string; count: string }>();
+
+    const countDisciplinesMap = Object.fromEntries(drows.map(r => [r.courseId, Number(r.count || 0)]));
+
+    // Turmas por curso (classes -> disciplines -> courses_disciplines)
+    const crows = await this.courseRepository.manager
+      .createQueryBuilder()
+      .select('cd.course_id', 'courseId')
+      .addSelect('COUNT(c.id)', 'count')
+      .from('classes', 'c')
+      .innerJoin('disciplines', 'd', 'c.discipline_id = d.id')
+      .innerJoin('courses_disciplines', 'cd', 'cd.discipline_id = d.id')
+      .where('cd.course_id IN (:...ids)', { ids })
+      .groupBy('cd.course_id')
+      .getRawMany<{ courseId: string; count: string }>();
+
+    const countClassesMap = Object.fromEntries(crows.map(r => [r.courseId, Number(r.count || 0)]));
+
+    for (const c of courses) {
+      (c as any).studentsCount = countStudentsMap[c.id] ?? 0;
+      (c as any).classesCount = countClassesMap[c.id] ?? 0;
+      (c as any).disciplinesCount = countDisciplinesMap[c.id] ?? 0;
+    }
+
+    return courses;
   }
 
   // Buscar Curso por id

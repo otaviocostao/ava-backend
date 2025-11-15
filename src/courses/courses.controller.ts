@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, HttpStatus, HttpCode } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, HttpStatus, HttpCode, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -16,9 +16,10 @@ export class CoursesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista todos os cursos e suas disciplinas.' })
-  findAll() {
-    return this.coursesService.findAll();
+  @ApiOperation({ summary: 'Lista todos os cursos e suas disciplinas. Pode filtrar por departamento.' })
+  @ApiQuery({ name: 'departmentId', required: false, description: 'Filtra cursos por departamento (UUID)' })
+  findAll(@Query('departmentId') departmentId?: string) {
+    return this.coursesService.findAll(departmentId);
   }
 
   @Get(':id')

@@ -11,6 +11,9 @@ export class Course {
     @Column({ length: 255, unique: true, nullable: false })
     name: string;
 
+    @Column({ length: 10, unique: true, nullable: true })
+    code: string;
+
     @ManyToOne(() => Department, (department) => department.courses, {
       onDelete: 'CASCADE',
       nullable: true,
@@ -22,6 +25,21 @@ export class Course {
         type: 'enum', enum: CourseStatus, default: CourseStatus.ACTIVE
     })
     status: CourseStatus;
+
+    @Column({ type: 'int', nullable: true })
+    totalHours: number;
+
+    @Column({ type: 'int', nullable: true })
+    durationSemesters: number;
+
+    @Column({ type: 'text', nullable: true })
+    description?: string;
+
+    @Column({ type: 'int', default: 0 })
+    studentsCount: number;
+
+    @Column({ type: 'int', default: 0 })
+    classesCount: number;
 
     @ManyToMany(() => Discipline, (discipline) => discipline.courses)
     @JoinTable({
