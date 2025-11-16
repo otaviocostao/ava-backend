@@ -13,7 +13,12 @@ export class FindRecipientsDto {
   role: RecipientRoleFilter;
 
   @IsUUID('4', { message: 'coordinatorId deve ser UUID válido' })
-  coordinatorId: string;
+  @IsOptional()
+  coordinatorId?: string;
+
+  @IsUUID('4', { message: 'teacherId deve ser UUID válido' })
+  @IsOptional()
+  teacherId?: string;
 
   @IsOptional()
   @IsString()

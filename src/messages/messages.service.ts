@@ -59,11 +59,11 @@ export class MessagesService {
         throw new NotFoundException(`Destinatário com ID "${receiverId}" não encontrado.`);
       }
 
-      // Validar se o destinatário é professor ou aluno
+      // Validar se o destinatário possui alguma role válida
       this.validateUserRole(receiver, 'destinatário');
 
-      // Validar se não é comunicação entre dois alunos
-      this.validateTeacherStudentCommunication(sender, receiver);
+      // Validar regras de comunicação entre perfis
+      await this.validateCommunicationRules(sender, receiver);
     }
 
     if (classId) {
@@ -365,7 +365,7 @@ export class MessagesService {
    * - teacher <-> teacher NÃO permitido
    * - student <-> student NÃO permitido
    */
-  private validateTeacherStudentCommunication(sender: User, receiver: User): void {
+  private async validateCommunicationRules(sender: User, receiver: User): Promise<void> {
     const senderIsTeacher = sender.roles.some(role => role.name === 'teacher');
     const senderIsStudent = sender.roles.some(role => role.name === 'student');
     const senderIsCoordinator = sender.roles.some(role => role.name === 'coordinator');
@@ -378,28 +378,62 @@ export class MessagesService {
       return;
     }
 
-    // Comunicação professor-aluno e aluno-professor é permitida
-    if ((senderIsTeacher && receiverIsStudent) || (senderIsStudent && receiverIsTeacher)) {
-      return;
+    // Student -> Teacher permitido; Student -> others negado
+    if (senderIsStudent) {
+      if (receiverIsTeacher) return;
+      throw new ForbiddenException('Alunos só podem enviar mensagens para professores.');
     }
 
-    // Se ambos são professores, não permitir comunicação direta
+    // Teacher -> Teacher: apenas se compartilham departamento
     if (senderIsTeacher && receiverIsTeacher) {
-      throw new ForbiddenException(
-        'Professores não podem enviar mensagens privadas para outros professores.'
+      const rows = await this.userRepository.query(
+        `SELECT 1
+         FROM department_teachers dt1
+         JOIN department_teachers dt2 ON dt2.department_id = dt1.department_id
+         WHERE dt1.user_id = $1 AND dt2.user_id = $2
+         LIMIT 1`,
+        [sender.id, receiver.id],
       );
-    }
-
-    // Se ambos são alunos, não permitir comunicação direta
-    if (senderIsStudent && receiverIsStudent) {
-      throw new ForbiddenException(
-        'Alunos não podem enviar mensagens privadas para outros alunos.'
-      );
-    }
-
-    // Professor/aluno para coordenador: permitido
-    if ((senderIsTeacher || senderIsStudent) && receiverIsCoordinator) {
+      if (rows.length === 0) {
+        throw new ForbiddenException('Professores só podem se comunicar com professores do mesmo departamento.');
+      }
       return;
     }
+
+    // Teacher -> Coordinator: coordenador de algum departamento do professor
+    if (senderIsTeacher && receiverIsCoordinator) {
+      const rows = await this.userRepository.query(
+        `SELECT 1
+         FROM departments d
+         JOIN department_teachers dt ON dt.department_id = d.id
+         WHERE dt.user_id = $1 AND d.coordinator_id = $2
+         LIMIT 1`,
+        [sender.id, receiver.id],
+      );
+      if (rows.length === 0) {
+        throw new ForbiddenException('Professor só pode se comunicar com coordenadores de seus departamentos.');
+      }
+      return;
+    }
+
+    // Teacher -> Student: aluno em curso de departamento do professor
+    if (senderIsTeacher && receiverIsStudent) {
+      const rows = await this.userRepository.query(
+        `SELECT 1
+         FROM student_courses sc
+         JOIN courses c ON c.id = sc.course_id
+         JOIN department_teachers dt ON dt.department_id = c.department_id
+         WHERE dt.user_id = $1 AND sc.student_id = $2
+         LIMIT 1`,
+        [sender.id, receiver.id],
+      );
+      if (rows.length === 0) {
+        throw new ForbiddenException('Professor só pode se comunicar com alunos vinculados a cursos de seus departamentos.');
+      }
+      return;
+    }
+
+    // Demais combinações negadas
+    throw new ForbiddenException('Combinação de remetente/destinatário não permitida.');
   }
 }
