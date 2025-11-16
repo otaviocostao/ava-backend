@@ -33,6 +33,7 @@ export class CommunicationsService {
     const role = query.role;
     const coordinatorId = query.coordinatorId;
     const teacherId = query.teacherId;
+    const studentId = query.studentId;
     const search = (query.q ?? '').trim().toLowerCase();
     const page = query.page ? parseInt(query.page, 10) : 1;
     const limit = query.limit ? parseInt(query.limit, 10) : 10;
@@ -62,6 +63,22 @@ export class CommunicationsService {
           .leftJoin('courses', 'c', 'c.id = sc.course_id')
           .leftJoin('department_teachers', 'dt_me', 'dt_me.department_id = c.department_id AND dt_me.user_id = :teacherId', { teacherId })
           .andWhere('dt_me.user_id IS NOT NULL');
+      }
+    } else if (studentId) {
+      if (role === RecipientRoleFilter.TEACHER) {
+        // professores dos departamentos dos cursos do aluno
+        qb = qb
+          .leftJoin('department_teachers', 'dt', 'dt.user_id = u.id')
+          .leftJoin('student_courses', 'sc', 'sc.student_id = :studentId', { studentId })
+          .leftJoin('courses', 'c', 'c.id = sc.course_id')
+          .andWhere('dt.department_id = c.department_id');
+      } else if (role === RecipientRoleFilter.COORDINATOR) {
+        // coordenadores dos departamentos dos cursos do aluno
+        qb = qb
+          .leftJoin('departments', 'd', 'd.coordinator_id = u.id')
+          .leftJoin('student_courses', 'sc', 'sc.student_id = :studentId', { studentId })
+          .leftJoin('courses', 'c', 'c.id = sc.course_id')
+          .andWhere('d.id = c.department_id');
       }
     } else if (coordinatorId) {
       if (role === RecipientRoleFilter.TEACHER) {

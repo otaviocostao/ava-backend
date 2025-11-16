@@ -20,6 +20,10 @@ export class FindRecipientsDto {
   @IsOptional()
   teacherId?: string;
 
+  @IsUUID('4', { message: 'studentId deve ser UUID válido' })
+  @IsOptional()
+  studentId?: string;
+
   @IsOptional()
   @IsString()
   q?: string;

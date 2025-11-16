@@ -378,9 +378,38 @@ export class MessagesService {
       return;
     }
 
-    // Student -> Teacher permitido; Student -> others negado
+    // Student -> Teacher/Coordinator: apenas se o destinatário pertence aos departamentos dos cursos do aluno
     if (senderIsStudent) {
-      if (receiverIsTeacher) return;
+      if (receiverIsTeacher) {
+        const rows = await this.userRepository.query(
+          `SELECT 1
+           FROM student_courses sc
+           JOIN courses c ON c.id = sc.course_id
+           JOIN department_teachers dt ON dt.department_id = c.department_id
+           WHERE sc.student_id = $1 AND dt.user_id = $2
+           LIMIT 1`,
+          [sender.id, receiver.id],
+        );
+        if (rows.length === 0) {
+          throw new ForbiddenException('Aluno só pode enviar mensagens a professores de departamentos dos seus cursos.');
+        }
+        return;
+      }
+      if (receiverIsCoordinator) {
+        const rows = await this.userRepository.query(
+          `SELECT 1
+           FROM student_courses sc
+           JOIN courses c ON c.id = sc.course_id
+           JOIN departments d ON d.id = c.department_id
+           WHERE sc.student_id = $1 AND d.coordinator_id = $2
+           LIMIT 1`,
+          [sender.id, receiver.id],
+        );
+        if (rows.length === 0) {
+          throw new ForbiddenException('Aluno só pode enviar mensagens a coordenadores dos departamentos de seus cursos.');
+        }
+        return;
+      }
       throw new ForbiddenException('Alunos só podem enviar mensagens para professores.');
     }
 
