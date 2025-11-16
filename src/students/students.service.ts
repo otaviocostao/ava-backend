@@ -221,9 +221,13 @@ export class StudentsService {
       return [];
     }
 
+    // Carrega as relações necessárias para evitar lookups adicionais e erros de IDs
     const grades = await this.gradesRepository
       .createQueryBuilder('grade')
-      .innerJoin('grade.enrollment', 'enrollment')
+      .innerJoinAndSelect('grade.activity', 'activity')
+      .innerJoinAndSelect('grade.enrollment', 'enrollment')
+      .innerJoinAndSelect('enrollment.class', 'class')
+      .innerJoinAndSelect('class.discipline', 'discipline')
       .where('enrollment.id IN (:...enrollmentIds)', { enrollmentIds })
       .orderBy('grade.gradedAt', 'DESC')
       .addOrderBy('grade.id', 'DESC')
@@ -234,32 +238,19 @@ export class StudentsService {
       return [];
     }
 
-    const activityIds = grades.map((g) => g.activity);
-    const activities =
-      activityIds.length > 0
-        ? await this.activityRepository
-            .createQueryBuilder('activity')
-            .innerJoinAndSelect('activity.class', 'class')
-            .innerJoinAndSelect('class.discipline', 'discipline')
-            .where('activity.id IN (:...activityIds)', { activityIds })
-            .getMany()
-        : [];
-
-    const enrollmentMap = new Map(enrollments.map((e) => [e.id, e]));
-
     return grades.map((grade) => {
-      const activity = activities.find((a) => a === grade.activity);
-      const enrollment = enrollmentMap.get(grade.enrollment.id);
+      const activity = grade.activity;
+      const enrollment = grade.enrollment;
 
       return {
         id: grade.id,
         activityTitle: activity?.title || '',
-        disciplineName: enrollment?.class.discipline?.name || activity?.class?.discipline?.name || '',
+        disciplineName: enrollment?.class?.discipline?.name || '',
         score: Number(grade.score),
-        maxScore: activity?.maxScore ? Number(activity.maxScore) : null,
+        maxScore: activity?.maxScore != null ? Number(activity.maxScore) : null,
         gradedAt: grade.gradedAt ?? null,
-      };
-    }) as RecentGrade[];
+      } as RecentGrade;
+    });
   }
 
   async getPendingActivitiesCount(studentId: string): Promise<PendingActivitiesCount> {
