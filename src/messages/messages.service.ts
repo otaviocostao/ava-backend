@@ -348,7 +348,7 @@ export class MessagesService {
    */
   private validateUserRole(user: User, userType: string): void {
     const hasValidRole = user.roles.some(role =>
-      role.name === 'teacher' || role.name === 'student' || role.name === 'coordinator'
+      role.name === 'teacher' || role.name === 'student' || role.name === 'coordinator' || role.name === 'admin'
     );
 
     if (!hasValidRole) {
@@ -369,9 +369,16 @@ export class MessagesService {
     const senderIsTeacher = sender.roles.some(role => role.name === 'teacher');
     const senderIsStudent = sender.roles.some(role => role.name === 'student');
     const senderIsCoordinator = sender.roles.some(role => role.name === 'coordinator');
+    const senderIsAdmin = sender.roles.some(role => role.name === 'admin');
     const receiverIsTeacher = receiver.roles.some(role => role.name === 'teacher');
     const receiverIsStudent = receiver.roles.some(role => role.name === 'student');
     const receiverIsCoordinator = receiver.roles.some(role => role.name === 'coordinator');
+    const receiverIsAdmin = receiver.roles.some(role => role.name === 'admin');
+
+    // Administradores podem enviar para qualquer combinação
+    if (senderIsAdmin) {
+      return;
+    }
 
     // Coordenadores podem enviar para qualquer combinação
     if (senderIsCoordinator) {
@@ -463,6 +470,9 @@ export class MessagesService {
     }
 
     // Demais combinações negadas
+    if (receiverIsAdmin) {
+      throw new ForbiddenException('Apenas administradores podem enviar mensagens para administradores.');
+    }
     throw new ForbiddenException('Combinação de remetente/destinatário não permitida.');
   }
 }
