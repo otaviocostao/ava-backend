@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { Activity } from './entities/activity.entity';
 import { ActivitySubmission } from './entities/activity-submission.entity';
 import { Class } from 'src/classes/entities/class.entity';
@@ -15,6 +15,7 @@ import { MulterFile } from 'src/common/types/multer.types';
 import { ActivityUnit } from '../common/enums/activity-unit.enum';
 import { StudentActivityDto } from './dto/student-activity.dto';
 import { Grade } from 'src/grades/entities/grade.entity';
+import { ActivityType } from 'src/common/enums/activity-type.enum';
 
 @Injectable()
 export class ActivitiesService {
@@ -321,7 +322,10 @@ export class ActivitiesService {
 
     const classIds = enrollments.map(e => e.class.id);
     const activities = await this.activityRepository.find({
-      where: { class: { id: In(classIds) } },
+      where: { 
+        class: { id: In(classIds) },
+        type: Not(ActivityType.EXAM)
+      },
       relations: ['class.discipline'], 
       order: { dueDate: 'ASC' },
     });
