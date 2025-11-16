@@ -18,8 +18,15 @@ export class CoursesController {
   @Get()
   @ApiOperation({ summary: 'Lista todos os cursos e suas disciplinas. Pode filtrar por departamento.' })
   @ApiQuery({ name: 'departmentId', required: false, description: 'Filtra cursos por departamento (UUID)' })
-  findAll(@Query('departmentId') departmentId?: string) {
-    return this.coursesService.findAll(departmentId);
+  @ApiQuery({ name: 'status', required: false, description: 'Filtra cursos por status (ativo e inativo)' })
+  @ApiQuery({ name: 'search', required: false, description: 'Busca por nome' })
+  findAll(
+    @Query('departmentId') departmentId?: string,
+    @Query('status') status?: 'active' | 'inactive',
+    @Query('search') search?: string,
+
+  ) {
+    return this.coursesService.findAll({departmentId, status, search});
   }
 
   @Get(':id')
