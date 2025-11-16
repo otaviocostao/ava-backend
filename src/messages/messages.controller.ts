@@ -14,7 +14,10 @@ export class MessagesController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Envia uma mensagem privada ou para uma turma.' })
   create(@Body() createMessageDto: CreateMessageDto, @Req() req: any) {
-    const senderId = req.user.id;
+    const senderId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
     return this.messagesService.create(createMessageDto, senderId);
   }
 
@@ -24,7 +27,10 @@ export class MessagesController {
     @Param('otherUserId', ParseUUIDPipe) otherUserId: string,
     @Req() req: any,
   ) {
-    const loggedInUserId = req.user.id;
+    const loggedInUserId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
     return this.messagesService.findConversation(loggedInUserId, otherUserId);
   }
 
@@ -34,8 +40,25 @@ export class MessagesController {
     @Param('classId', ParseUUIDPipe) classId: string,
     @Req() req: any,
   ) {
-    const requestingUserId = req.user.id;
+    const requestingUserId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
     return this.messagesService.findClassMessages(classId, requestingUserId);
+  }
+
+  @Get('inbox')
+  @ApiOperation({ summary: 'Lista os resumos das conversas diretas (caixa de entrada) do usuário autenticado.' })
+  findInbox(@Req() req: any): Promise<Array<{
+    otherUser: { id: string; name: string; email: string };
+    lastMessage: { id: string; content: string; sentAt: Date; isRead: boolean };
+    unreadCount: number;
+  }>> {
+    const loggedInUserId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
+    return this.messagesService.getInboxSummaries(loggedInUserId);
   }
 
   @Patch(':id')
@@ -45,7 +68,10 @@ export class MessagesController {
     @Body() updateMessageDto: UpdateMessageDto,
     @Req() req: any,
   ) {
-    const requestingUserId = req.user.id;
+    const requestingUserId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
     return this.messagesService.update(id, updateMessageDto, requestingUserId);
   }
 
@@ -56,7 +82,10 @@ export class MessagesController {
     @Body() markMessageReadDto: MarkMessageReadDto,
     @Req() req: any,
   ) {
-    const requestingUserId = req.user.id;
+    const requestingUserId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
     return this.messagesService.markAsRead(id, requestingUserId, markMessageReadDto);
   }
 
@@ -64,7 +93,10 @@ export class MessagesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove uma mensagem enviada pelo usuário autenticado.' })
   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
-    const requestingUserId = req.user.id;
+    const requestingUserId =
+      req?.user?.id ??
+      (req?.headers?.['x-user-id'] as string | undefined) ??
+      (req?.query?.senderId as string | undefined);
     return this.messagesService.remove(id, requestingUserId);
   }
 }

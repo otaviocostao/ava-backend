@@ -109,6 +109,60 @@ export class MessagesService {
     });
   }
 
+  /**
+   * Retorna um resumo da caixa de entrada do usuário com conversas diretas (sem turma).
+   * Inclui o último conteúdo e contagem de não lidas por interlocutor.
+   */
+  async getInboxSummaries(userId: string): Promise<Array<{
+    otherUser: Pick<User, 'id' | 'name' | 'email'>;
+    lastMessage: Pick<Message, 'id' | 'content' | 'sentAt' | 'isRead'>;
+    unreadCount: number;
+  }>> {
+    // Busca mensagens diretas (sem turma) envolvendo o usuário
+    const messages = await this.messageRepository.find({
+      where: [
+        { class: null, sender: { id: userId } as any },
+        { class: null, receiver: { id: userId } as any },
+      ] as any,
+      relations: ['sender', 'receiver'],
+      order: { sentAt: 'DESC' },
+    });
+
+    type Summary = {
+      otherUser: Pick<User, 'id' | 'name' | 'email'>;
+      lastMessage: Pick<Message, 'id' | 'content' | 'sentAt' | 'isRead'>;
+      unreadCount: number;
+    };
+
+    const map = new Map<string, Summary>();
+
+    for (const m of messages) {
+      const isReceiver = m.receiver?.id === userId;
+      const other = isReceiver ? m.sender : m.receiver;
+      if (!other) continue;
+      const key = other.id;
+
+      // Primeiro encontrado é o último (ordenado DESC)
+      if (!map.has(key)) {
+        map.set(key, {
+          otherUser: { id: other.id, name: other.name, email: other.email },
+          lastMessage: { id: m.id, content: m.content, sentAt: m.sentAt, isRead: m.isRead },
+          unreadCount: 0,
+        });
+      }
+
+      // Conta não lidas do usuário
+      if (isReceiver && !m.isRead) {
+        const s = map.get(key)!;
+        s.unreadCount += 1;
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      return (b.lastMessage.sentAt?.getTime?.() ?? 0) - (a.lastMessage.sentAt?.getTime?.() ?? 0);
+    });
+  }
+
   async update(messageId: string, updateMessageDto: UpdateMessageDto, requestingUserId: string): Promise<Message> {
     const message = await this.messageRepository.findOne({
       where: { id: messageId },
@@ -290,29 +344,44 @@ export class MessagesService {
   }
 
   /**
-   * Valida se o usuário possui role de professor ou aluno
+   * Valida se o usuário possui role permitida para envio de mensagens
    */
   private validateUserRole(user: User, userType: string): void {
-    const hasValidRole = user.roles.some(role => 
-      role.name === 'teacher' || role.name === 'student'
+    const hasValidRole = user.roles.some(role =>
+      role.name === 'teacher' || role.name === 'student' || role.name === 'coordinator'
     );
 
     if (!hasValidRole) {
       throw new ForbiddenException(
-        `Apenas professores e alunos podem enviar mensagens. O ${userType} deve ter role de 'teacher' ou 'student'.`
+        `Apenas professores, alunos e coordenadores podem enviar mensagens. O ${userType} deve ter role 'teacher', 'student' ou 'coordinator'.`
       );
     }
   }
 
   /**
    * Valida se a comunicação é permitida entre os usuários
-   * Apenas professores podem enviar mensagens para alunos e vice-versa
+   * - Coordenadores podem enviar para professores, alunos e outros coordenadores
+   * - Professores e alunos podem se comunicar entre si (teacher <-> student)
+   * - teacher <-> teacher NÃO permitido
+   * - student <-> student NÃO permitido
    */
   private validateTeacherStudentCommunication(sender: User, receiver: User): void {
     const senderIsTeacher = sender.roles.some(role => role.name === 'teacher');
     const senderIsStudent = sender.roles.some(role => role.name === 'student');
+    const senderIsCoordinator = sender.roles.some(role => role.name === 'coordinator');
     const receiverIsTeacher = receiver.roles.some(role => role.name === 'teacher');
     const receiverIsStudent = receiver.roles.some(role => role.name === 'student');
+    const receiverIsCoordinator = receiver.roles.some(role => role.name === 'coordinator');
+
+    // Coordenadores podem enviar para qualquer combinação
+    if (senderIsCoordinator) {
+      return;
+    }
+
+    // Comunicação professor-aluno e aluno-professor é permitida
+    if ((senderIsTeacher && receiverIsStudent) || (senderIsStudent && receiverIsTeacher)) {
+      return;
+    }
 
     // Se ambos são professores, não permitir comunicação direta
     if (senderIsTeacher && receiverIsTeacher) {
@@ -328,8 +397,8 @@ export class MessagesService {
       );
     }
 
-    // Comunicação professor-aluno e aluno-professor é permitida
-    if ((senderIsTeacher && receiverIsStudent) || (senderIsStudent && receiverIsTeacher)) {
+    // Professor/aluno para coordenador: permitido
+    if ((senderIsTeacher || senderIsStudent) && receiverIsCoordinator) {
       return;
     }
   }
