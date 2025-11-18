@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, HttpCode, HttpStatus, ParseUUIDPipe, Query, UseInterceptors, UploadedFiles, UseGuards, UnauthorizedException } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiConsumes, ApiParam, ApiQuery, ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse, ApiBody, ApiBadRequestResponse, ApiNotFoundResponse, ApiForbiddenResponse, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, HttpCode, HttpStatus, ParseUUIDPipe, Query, UseGuards, UnauthorizedException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiOperation, ApiTags, ApiParam, ApiQuery, ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse, ApiBadRequestResponse, ApiNotFoundResponse, ApiForbiddenResponse, ApiBearerAuth, ApiUnauthorizedResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { VideoLessonsService } from './video-lessons.service';
 import { CreateVideoLessonDto } from './dto/create-video-lesson.dto';
 import { CreateVideoLessonUploadDto } from './dto/create-video-lesson-upload.dto';
@@ -23,23 +23,38 @@ export class VideoLessonsController {
     return this.videoLessonsService.create(createVideoLessonDto, uploaderId);
   }
 
-  @Post('classes/:classId/video-lessons')
+  @Post('disciplines/:disciplineId/video-lessons')
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ 
-    summary: 'Cria uma nova video-aula e retorna URL de upload pré-assinada.',
-    description: 'Cria o registro da video-aula no banco de dados e retorna uma URL para upload do arquivo de vídeo. O status inicial será "pending" até que o upload seja finalizado.',
+    summary: 'Cria uma nova video-aula; se enviado arquivo, o upload é feito no mesmo POST.',
+    description: 'Com arquivo: cria e envia o vídeo. Sem arquivo: retorna URL de upload e metadados.',
   })
-  @ApiParam({ name: 'classId', description: 'ID da turma', type: String, format: 'uuid' })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
+  @ApiBody({
+    description: 'Metadados da video-aula e arquivo opcional (file).',
+    schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['title'],
+    },
+  })
   @ApiCreatedResponse({
-    description: 'Video-aula criada com sucesso. Retorna URL de upload e metadados.',
+    description: 'Video-aula criada com sucesso. Com arquivo: upload concluído; Sem arquivo: retorna uploadUrl.',
     schema: {
       example: {
         id: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
-        objectKey: 'video-aulas/3d5cf123-a0b12c3d-4e5f-6789-0123/9f77a123-4567-8901-2345-6789abcdef/video.mp4',
-        uploadUrl: 'https://supabase.co/storage/v1/object/video-aulas/...',
-        expiresInSeconds: 600,
+        objectKey: 'video-aulas/3d5cf123-a0b12c3d-4e5f-6789-0123/a0b12c3d-4e5f-6789-0123-456789abcdef',
+        fileUrl: 'https://.../storage/v1/object/public/video-aulas/disciplineId/videoLessonId',
+        uploadUrl: undefined,
+        expiresInSeconds: undefined,
       },
     },
   })
@@ -48,15 +63,19 @@ export class VideoLessonsController {
   @ApiForbiddenResponse({ description: 'Usuário não tem permissão para criar video-aulas nesta turma' })
   @ApiNotFoundResponse({ description: 'Turma não encontrada' })
   createWithUploadUrl(
-    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
     @Body() createDto: CreateVideoLessonUploadDto,
+    @UploadedFile() file: Express.Multer.File,
     @Req() req: any,
   ) {
     if (!req.user || !req.user.id) {
       throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
     }
     const teacherId = req.user.id;
-    return this.videoLessonsService.createWithUploadUrl(classId, createDto, teacherId);
+    if (file) {
+      return this.videoLessonsService.createWithFile(disciplineId, createDto, teacherId, file);
+    }
+    return this.videoLessonsService.createWithUploadUrl(disciplineId, createDto, teacherId);
   }
 
   @Post(':id/finalize')
@@ -75,7 +94,7 @@ export class VideoLessonsController {
         id: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
         title: 'Aula 03 — Introdução a Grafos',
         status: 'ready',
-        objectKey: 'video-aulas/.../video.mp4',
+        objectKey: 'video-aulas/<disciplineId>/<videoLessonId>',
       },
     },
   })
@@ -95,14 +114,61 @@ export class VideoLessonsController {
     return this.videoLessonsService.finalizeUpload(id, teacherId);
   }
 
-  @Get('classes/:classId/video-lessons/:id/stream-url')
+  @Post(':id/upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Faz upload do arquivo de vídeo para a video-aula.',
+    description: 'Envia um único arquivo de vídeo para o caminho: video-aulas/{disciplineId}/{videoLessonId}.',
+  })
+  @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
+  @ApiBody({
+    description: 'Arquivo de vídeo',
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiOkResponse({
+    description: 'Upload realizado com sucesso',
+    schema: {
+      example: {
+        id: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
+        objectKey: 'video-aulas/<disciplineId>/<videoLessonId>',
+        fileUrl: 'https://.../storage/v1/object/public/video-aulas/<disciplineId>/<videoLessonId>',
+      },
+    },
+  })
+  @ApiBadRequestResponse({ description: 'Nenhum arquivo enviado ou estado inválido' })
+  @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
+  @ApiForbiddenResponse({ description: 'Usuário não tem permissão para enviar este vídeo' })
+  @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
+  uploadVideo(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
+    }
+    const teacherId = req.user.id;
+    return this.videoLessonsService.uploadVideoFile(id, teacherId, file);
+  }
+
+  @Get('disciplines/:disciplineId/video-lessons/:id/stream-url')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ 
     summary: 'Obtém URL pré-assinada para visualização do vídeo no modal.',
     description: 'Retorna uma URL pré-assinada temporária (válida por 10 minutos) para visualização do vídeo. Usado pelo frontend para exibir o vídeo no player.',
   })
-  @ApiParam({ name: 'classId', description: 'ID da turma', type: String, format: 'uuid' })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
   @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
   @ApiOkResponse({
     description: 'URL pré-assinada gerada com sucesso',
@@ -110,7 +176,6 @@ export class VideoLessonsController {
       example: {
         url: 'https://supabase.co/storage/v1/object/sign/video-aulas/...?token=...',
         expiresInSeconds: 600,
-        mimeType: 'video/mp4',
       },
     },
   })
@@ -119,7 +184,7 @@ export class VideoLessonsController {
   @ApiForbiddenResponse({ description: 'Usuário não tem acesso ao conteúdo desta turma' })
   @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
   getStreamUrl(
-    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: any,
   ) {
@@ -127,19 +192,19 @@ export class VideoLessonsController {
       throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
     }
     const requestingUserId = req.user.id;
-    return this.videoLessonsService.getStreamUrl(classId, id, requestingUserId);
+    return this.videoLessonsService.getStreamUrl(disciplineId, id, requestingUserId);
   }
 
-  @Get('classes/:classId/video-lessons')
+  @Get('disciplines/:disciplineId/video-lessons')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ 
-    summary: 'Lista todas as videoaulas disponíveis para a turma informada.',
-    description: 'Retorna todas as video-aulas da turma, ordenadas por data de criação (mais recentes primeiro).',
+    summary: 'Lista todas as videoaulas disponíveis para a disciplina informada.',
+    description: 'Retorna todas as video-aulas da disciplina, ordenadas por data de criação (mais recentes primeiro).',
   })
-  @ApiParam({ name: 'classId', description: 'ID da turma', type: String, format: 'uuid' })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
   @ApiOkResponse({
-    description: 'Lista de video-aulas da turma',
+    description: 'Lista de video-aulas da disciplina',
     schema: {
       type: 'array',
       example: [
@@ -149,11 +214,9 @@ export class VideoLessonsController {
           description: 'Conteúdo da semana 3',
           status: 'ready',
           visibility: 'class',
-          mimeType: 'video/mp4',
-          sizeBytes: 104857600,
           durationSeconds: 3600,
           createdAt: '2025-01-01T00:00:00.000Z',
-          teacher: { id: '...', name: 'Professor Silva' },
+          uploadedBy: { id: '...', name: 'Professor Silva' },
         },
       ],
     },
@@ -161,22 +224,22 @@ export class VideoLessonsController {
   @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
   @ApiForbiddenResponse({ description: 'Usuário não tem acesso ao conteúdo desta turma' })
   @ApiNotFoundResponse({ description: 'Turma não encontrada' })
-  findAllByClass(
-    @Param('classId', ParseUUIDPipe) classId: string,
+  findAllByDiscipline(
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
     @Req() req: any,
   ) {
     if (!req.user || !req.user.id) {
       throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
     }
     const requestingUserId = req.user.id;
-    return this.videoLessonsService.findAllByClass(classId, requestingUserId);
+    return this.videoLessonsService.findAllByDiscipline(disciplineId, requestingUserId);
   }
 
-  @Get('classes/:classId/video-lessons/:id')
+  @Get('disciplines/:disciplineId/video-lessons/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Obtém detalhes de uma videoaula específica.' })
-  @ApiParam({ name: 'classId', description: 'ID da turma', type: String, format: 'uuid' })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
   @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
   @ApiOkResponse({
     description: 'Detalhes da video-aula',
@@ -187,10 +250,7 @@ export class VideoLessonsController {
         description: 'Conteúdo da semana 3',
         status: 'ready',
         visibility: 'class',
-        mimeType: 'video/mp4',
-        sizeBytes: 104857600,
         durationSeconds: 3600,
-        attachmentUrls: [],
         createdAt: '2025-01-01T00:00:00.000Z',
         teacher: { id: '...', name: 'Professor Silva' },
       },
@@ -199,8 +259,8 @@ export class VideoLessonsController {
   @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
   @ApiForbiddenResponse({ description: 'Usuário não tem acesso ao conteúdo desta turma' })
   @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
-  findOneByClass(
-    @Param('classId', ParseUUIDPipe) classId: string,
+  findOneByDiscipline(
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: any,
   ) {
@@ -211,11 +271,11 @@ export class VideoLessonsController {
     return this.videoLessonsService.findOne(id, requestingUserId);
   }
 
-  @Patch('classes/:classId/video-lessons/:id')
+  @Patch('disciplines/:disciplineId/video-lessons/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Atualiza as informações de uma videoaula criada pelo usuário.' })
-  @ApiParam({ name: 'classId', description: 'ID da turma', type: String, format: 'uuid' })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
   @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
   @ApiOkResponse({
     description: 'Video-aula atualizada com sucesso',
@@ -233,8 +293,8 @@ export class VideoLessonsController {
   @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
   @ApiForbiddenResponse({ description: 'Usuário não tem permissão para editar esta video-aula' })
   @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
-  updateByClass(
-    @Param('classId', ParseUUIDPipe) classId: string,
+  updateByDiscipline(
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateVideoLessonDto: UpdateVideoLessonDto,
     @Req() req: any,
@@ -250,22 +310,22 @@ export class VideoLessonsController {
     );
   }
 
-  @Delete('classes/:classId/video-lessons/:id')
+  @Delete('disciplines/:disciplineId/video-lessons/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ 
-    summary: 'Remove uma videoaula do acervo da turma.',
+    summary: 'Remove uma videoaula do acervo da disciplina.',
     description: 'Realiza soft delete da video-aula (marca como deletada, mas mantém os dados no banco).',
   })
-  @ApiParam({ name: 'classId', description: 'ID da turma', type: String, format: 'uuid' })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
   @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
   @ApiNoContentResponse({ description: 'Video-aula removida com sucesso' })
   @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
   @ApiForbiddenResponse({ description: 'Usuário não tem permissão para remover esta video-aula' })
   @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
-  removeByClass(
-    @Param('classId', ParseUUIDPipe) classId: string,
+  removeByDiscipline(
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: any,
   ) {
@@ -276,135 +336,9 @@ export class VideoLessonsController {
     return this.videoLessonsService.remove(id, requestingUserId);
   }
 
-  @Post(':id/attachments')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('files', 10))
-  @ApiBearerAuth('JWT-auth')
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ 
-    summary: 'Faz upload de anexos para uma video-aula (múltiplos arquivos).',
-    description: 'Faz upload de até 10 arquivos como anexos da video-aula. Os arquivos serão salvos em: video-aulas/{classId}/{videoLessonId}/{teacherId}/{uuid}-{nomeArquivo}.{ext}',
-  })
-  @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
-  @ApiBody({
-    description: 'Arquivos a serem enviados como anexos da video-aula (múltiplos arquivos)',
-    schema: {
-      type: 'object',
-      properties: {
-        files: {
-          type: 'array',
-          items: { type: 'string', format: 'binary' },
-          description: 'Selecione múltiplos arquivos para upload (até 10 arquivos)',
-        },
-      },
-      required: ['files'],
-    },
-  })
-  @ApiOkResponse({
-    description: 'Upload realizado com sucesso',
-    schema: {
-      example: {
-        videoLessonId: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
-        uploaded: [
-          {
-            url: 'https://storage.../video-aulas/.../abc123-arquivo.pdf',
-            name: 'arquivo.pdf',
-          },
-        ],
-        attachmentUrls: ['https://storage.../video-aulas/.../abc123-arquivo.pdf'],
-      },
-    },
-  })
-  @ApiBadRequestResponse({ description: 'Nenhum arquivo fornecido ou dados inválidos' })
-  @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
-  @ApiForbiddenResponse({ description: 'Usuário não tem permissão para adicionar anexos a esta video-aula' })
-  @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
-  uploadAttachments(
-    @Param('id', ParseUUIDPipe) id: string,
-    @UploadedFiles() files: MulterFile[],
-    @Req() req: any,
-  ) {
-    if (!req.user || !req.user.id) {
-      throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
-    }
-    const teacherId = req.user.id;
-    return this.videoLessonsService.uploadAttachments(id, teacherId, files);
-  }
+  // Endpoints de anexos removidos: a video-aula possui apenas um arquivo de vídeo principal.
 
-  @Get(':id/attachments')
-  @ApiOperation({ summary: 'Lista anexos de uma video-aula.' })
-  @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
-  @ApiOkResponse({
-    description: 'Lista de anexos da video-aula',
-    schema: {
-      example: {
-        videoLessonId: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
-        attachments: [
-          {
-            url: 'https://storage.../video-aulas/.../abc123-arquivo.pdf',
-            name: 'arquivo.pdf',
-          },
-        ],
-      },
-    },
-  })
-  @ApiNotFoundResponse({ description: 'Video-aula não encontrada' })
-  listAttachments(
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.videoLessonsService.listAttachments(id);
-  }
-
-  @Delete(':id/attachments')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('JWT-auth')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Remove um anexo de uma video-aula.' })
-  @ApiParam({ name: 'id', description: 'ID da video-aula', type: String, format: 'uuid' })
-  @ApiQuery({ name: 'url', description: 'URL completa do anexo a ser removido', type: String, required: true })
-  @ApiOkResponse({
-    description: 'Anexo removido com sucesso',
-    schema: {
-      example: {
-        videoLessonId: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
-        removedUrl: 'https://storage.../video-aulas/.../abc123-arquivo.pdf',
-        attachmentUrls: [],
-      },
-    },
-  })
-  @ApiBadRequestResponse({ description: 'URL do anexo não fornecida ou inválida' })
-  @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
-  @ApiForbiddenResponse({ description: 'Usuário não tem permissão para remover anexos desta video-aula' })
-  @ApiNotFoundResponse({ description: 'Video-aula ou anexo não encontrado' })
-  removeAttachment(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query('url') attachmentUrl: string,
-    @Req() req: any,
-  ) {
-    if (!req.user || !req.user.id) {
-      throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
-    }
-    const teacherId = req.user.id;
-    return this.videoLessonsService.removeAttachment(id, attachmentUrl, teacherId);
-  }
-
-  // Endpoints legados - mantidos para compatibilidade
-  @Get('class/:classId')
-  @ApiOperation({ summary: 'Lista todas as videoaulas disponíveis para a turma informada (legado).' })
-  findAllByClassLegacy(
-    @Param('classId', ParseUUIDPipe) classId: string,
-  ) {
-    return this.videoLessonsService.findAllByClass(classId);
-  }
-
-  @Get('class/:classId/watches')
-  @ApiOperation({ summary: 'Lista o status de visualização das vídeo-aulas da turma para um aluno.' })
-  findWatchesByClass(
-    @Param('classId', ParseUUIDPipe) classId: string,
-    @Query('studentId', ParseUUIDPipe) studentId: string,
-  ) {
-    return this.videoLessonsService.findWatchesByClass(classId, studentId);
-  }
+  // Endpoints legados removidos (rota por turma substituída por rota por disciplina)
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtém detalhes de uma videoaula específica.' })

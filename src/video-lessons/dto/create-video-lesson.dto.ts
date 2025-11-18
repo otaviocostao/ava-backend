@@ -1,17 +1,13 @@
-import { IsString, IsNotEmpty, IsUrl, IsNumber, IsUUID, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsUUID, IsOptional } from 'class-validator';
 
 export class CreateVideoLessonDto {
   @IsUUID()
   @IsNotEmpty()
-  classId: string;
+  disciplineId: string;
 
   @IsString()
   @IsNotEmpty()
   title: string;
-
-  @IsUrl()
-  @IsOptional()
-  videoUrl?: string;
 
   @IsNumber()
   @IsOptional()

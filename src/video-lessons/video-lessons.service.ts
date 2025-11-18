@@ -12,7 +12,6 @@ import { User } from 'src/users/entities/user.entity';
 import { StorageService } from 'src/storage/storage.service';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
-import type { MulterFile } from 'src/common/types/multer.types';
 
 @Injectable()
 export class VideoLessonsService {
@@ -38,7 +37,7 @@ export class VideoLessonsService {
    * Cria uma nova video-aula e retorna URL de upload pré-assinada
    */
   async createWithUploadUrl(
-    classId: string,
+    disciplineId: string,
     createDto: CreateVideoLessonUploadDto,
     teacherId: string,
   ): Promise<{
@@ -47,68 +46,190 @@ export class VideoLessonsService {
     uploadUrl: string;
     expiresInSeconds: number;
   }> {
-    const classInstance = await this.classRepository.findOne({
-      where: { id: classId },
-      relations: ['teacher'],
+    // Verificar se o usuário é professor de alguma turma da disciplina informada
+    const classOfDiscipline = await this.classRepository.findOne({
+      where: {
+        discipline: { id: disciplineId },
+        teacher: { id: teacherId },
+      },
+      relations: ['discipline', 'teacher'],
     });
 
-    if (!classInstance) {
-      throw new NotFoundException(`Turma com ID "${classId}" não encontrada.`);
+    if (!classOfDiscipline) {
+      throw new ForbiddenException(
+        'Você não tem permissão para adicionar vídeos nesta disciplina.',
+      );
     }
 
-    // Verificar se o usuário é professor da turma ou admin
-    const isTeacher = classInstance.teacher?.id === teacherId;
-    if (!isTeacher) {
-      // Verificar se é admin (pode ser implementado com roles)
-      throw new ForbiddenException('Você não tem permissão para adicionar vídeos a esta turma.');
-    }
-
-    // Gerar ID temporário para construir o objectKey
-    // O ID real será gerado pelo banco, mas precisamos de um temporário para o objectKey
-    const tempId = nanoid();
-    
-    // Construir object_key: video-aulas/{classId}/{videoLessonId}/{teacherId}/video.{ext}
-    const fileName = `video.${createDto.fileExtension}`;
-    const tempObjectKey = `${classId}/${tempId}/${teacherId}/${fileName}`;
-    const tempFullObjectKey = `${this.bucketName}/${tempObjectKey}`;
-
-    // Criar registro no banco com status 'pending' (o ID será gerado pelo banco)
+    // Criar registro no banco com status 'pending'
     const newVideoLesson = this.videoLessonRepository.create({
       title: createDto.title,
       description: createDto.description,
-      class: { id: classId },
-      teacher: { id: teacherId },
-      objectKey: tempFullObjectKey, // Temporário, será atualizado
-      fileExtension: createDto.fileExtension,
-      mimeType: createDto.mimeType,
-      sizeBytes: createDto.sizeBytes,
+      discipline: { id: disciplineId },
+      uploadedBy: { id: teacherId },
+      objectKey: null,
       status: 'pending',
       visibility: 'class',
       attachmentUrls: [],
     });
 
     const savedVideoLesson = await this.videoLessonRepository.save(newVideoLesson);
-    
-    // Atualizar objectKey com o ID real gerado pelo banco
-    const realObjectKey = `${classId}/${savedVideoLesson.id}/${teacherId}/${fileName}`;
-    const realFullObjectKey = `${this.bucketName}/${realObjectKey}`;
-    savedVideoLesson.objectKey = realFullObjectKey;
+
+    // Padrão final de caminho: video-aulas/{disciplineId}/{videoLessonId}
+    const objectPath = `${disciplineId}/${savedVideoLesson.id}`;
+    const fullObjectKey = `${this.bucketName}/${objectPath}`;
+    savedVideoLesson.objectKey = fullObjectKey;
     await this.videoLessonRepository.save(savedVideoLesson);
 
     // Gerar URL de upload (nota: Supabase não tem presigned URLs para upload como S3)
     // Retornamos a URL da API REST que será usada pelo backend para fazer upload
     const uploadUrl = await this.storageService.createPresignedUploadUrl(
       this.bucketName,
-      realObjectKey,
+      objectPath,
       this.presignedUrlExpiresIn,
-      createDto.mimeType,
+      createDto.mimeType || 'application/octet-stream',
     );
 
     return {
       id: savedVideoLesson.id,
-      objectKey: realFullObjectKey,
+      objectKey: fullObjectKey,
       uploadUrl,
       expiresInSeconds: this.presignedUrlExpiresIn,
+    };
+  }
+
+  /**
+   * Cria a video-aula e faz upload do arquivo no mesmo fluxo
+   */
+  async createWithFile(
+    disciplineId: string,
+    createDto: CreateVideoLessonUploadDto,
+    teacherId: string,
+    file: Express.Multer.File,
+  ): Promise<{
+    id: string;
+    objectKey: string;
+    fileUrl: string;
+    status: string;
+  }> {
+    // Verificar se o usuário é professor de alguma turma da disciplina informada
+    const classOfDiscipline = await this.classRepository.findOne({
+      where: {
+        discipline: { id: disciplineId },
+        teacher: { id: teacherId },
+      },
+      relations: ['discipline', 'teacher'],
+    });
+
+    if (!classOfDiscipline) {
+      throw new ForbiddenException(
+        'Você não tem permissão para adicionar vídeos nesta disciplina.',
+      );
+    }
+
+    if (!file) {
+      throw new BadRequestException('Arquivo não enviado (campo "file" obrigatório).');
+    }
+
+    // Criar registro no banco com status 'pending' e sem objectKey
+    const newVideoLesson = this.videoLessonRepository.create({
+      title: createDto.title,
+      description: createDto.description,
+      discipline: { id: disciplineId },
+      uploadedBy: { id: teacherId },
+      objectKey: null,
+      status: 'pending',
+      visibility: 'class',
+      attachmentUrls: [],
+    });
+
+    const savedVideoLesson = await this.videoLessonRepository.save(newVideoLesson);
+
+    // Definir objectKey final: video-aulas/{disciplineId}/{videoLessonId}
+    const objectPath = `${disciplineId}/${savedVideoLesson.id}`;
+    const fullObjectKey = `${this.bucketName}/${objectPath}`;
+    savedVideoLesson.objectKey = fullObjectKey;
+
+    // Enviar arquivo ao bucket
+    const fileUrl = await this.storageService.uploadFileTo(
+      this.bucketName,
+      objectPath,
+      file.buffer,
+      file.mimetype || createDto.mimeType || 'application/octet-stream',
+    );
+
+    // Marcar como ready
+    savedVideoLesson.status = 'ready';
+
+    await this.videoLessonRepository.save(savedVideoLesson);
+
+    return {
+      id: savedVideoLesson.id,
+      objectKey: fullObjectKey,
+      fileUrl,
+      status: savedVideoLesson.status,
+    };
+  }
+
+  /**
+   * Faz upload do arquivo de vídeo via backend para o bucket
+   * Caminho: video-aulas/{disciplineId}/{videoLessonId}
+   */
+  async uploadVideoFile(
+    videoLessonId: string,
+    teacherId: string,
+    file: Express.Multer.File,
+  ): Promise<{
+    id: string;
+    objectKey: string;
+    fileUrl: string;
+  }> {
+    if (!file) {
+      throw new BadRequestException('Arquivo não enviado (campo "file" obrigatório).');
+    }
+
+    const videoLesson = await this.videoLessonRepository.findOne({
+      where: { id: videoLessonId },
+      relations: ['discipline', 'uploadedBy'],
+    });
+
+    if (!videoLesson) {
+      throw new NotFoundException(`Video-aula com ID "${videoLessonId}" não encontrada.`);
+    }
+
+    // Verificar permissão
+    const ownerId = videoLesson.uploadedBy?.id;
+    if (!ownerId || ownerId !== teacherId) {
+      throw new ForbiddenException('Você não tem permissão para enviar o vídeo desta video-aula.');
+    }
+
+    // Apenas um vídeo permitido: exige status 'pending'
+    if (videoLesson.status !== 'pending') {
+      throw new BadRequestException('Video-aula já possui vídeo enviado ou já foi finalizada.');
+    }
+
+    // Garante objectKey no padrão exigido
+    if (!videoLesson.objectKey) {
+      const objectPath = `${videoLesson.discipline.id}/${videoLesson.id}`;
+      videoLesson.objectKey = `${this.bucketName}/${objectPath}`;
+    }
+
+    const path = videoLesson.objectKey.replace(`${this.bucketName}/`, '');
+
+    // Faz upload do arquivo para o bucket
+    const fileUrl = await this.storageService.uploadFileTo(
+      this.bucketName,
+      path,
+      file.buffer,
+      file.mimetype || 'application/octet-stream',
+    );
+
+    await this.videoLessonRepository.save(videoLesson);
+
+    return {
+      id: videoLesson.id,
+      objectKey: videoLesson.objectKey,
+      fileUrl,
     };
   }
 
@@ -118,17 +239,17 @@ export class VideoLessonsService {
   async finalizeUpload(videoLessonId: string, teacherId: string): Promise<VideoLesson> {
     const videoLesson = await this.videoLessonRepository.findOne({
       where: { id: videoLessonId },
-      relations: ['teacher', 'class', 'uploadedBy'],
+      relations: ['discipline', 'uploadedBy'],
     });
 
     if (!videoLesson) {
       throw new NotFoundException(`Video-aula com ID "${videoLessonId}" não encontrada.`);
     }
 
-    // Verificar permissão: usar teacher se disponível, senão usar uploadedBy (legado)
-    const ownerId = videoLesson.teacher?.id || videoLesson.uploadedBy?.id;
+    // Verificar permissão
+    const ownerId = videoLesson.uploadedBy?.id;
     if (!ownerId) {
-      throw new BadRequestException('Video-aula não possui professor associado.');
+      throw new BadRequestException('Video-aula não possui usuário associado.');
     }
 
     if (ownerId !== teacherId) {
@@ -147,19 +268,18 @@ export class VideoLessonsService {
    * Obtém URL pré-assinada para visualização do vídeo
    */
   async getStreamUrl(
-    classId: string,
+    disciplineId: string,
     videoLessonId: string,
     requestingUserId: string,
   ): Promise<{
     url: string;
     expiresInSeconds: number;
-    mimeType: string;
   }> {
     // Verificar permissão de acesso
-    await this.ensureUserCanViewClassContent(classId, requestingUserId);
+    await this.ensureUserCanViewDisciplineContent(disciplineId, requestingUserId);
 
     const videoLesson = await this.videoLessonRepository.findOne({
-      where: { id: videoLessonId, class: { id: classId } },
+      where: { id: videoLessonId, discipline: { id: disciplineId } },
     });
 
     if (!videoLesson) {
@@ -168,6 +288,10 @@ export class VideoLessonsService {
 
     if (videoLesson.status !== 'ready') {
       throw new BadRequestException(`Video-aula ainda não está pronta para visualização (status: ${videoLesson.status}).`);
+    }
+
+    if (!videoLesson.objectKey) {
+      throw new BadRequestException('Video-aula não possui arquivo associado para streaming.');
     }
 
     // Extrair path do objectKey (remover nome do bucket)
@@ -184,7 +308,6 @@ export class VideoLessonsService {
     return {
       url: streamUrl,
       expiresInSeconds: this.presignedUrlExpiresIn,
-      mimeType: videoLesson.mimeType || 'video/mp4',
     };
   }
 
@@ -195,29 +318,28 @@ export class VideoLessonsService {
     createVideoLessonDto: CreateVideoLessonDto,
     uploaderId: string,
   ): Promise<VideoLesson> {
-    const { classId, title, videoUrl, duration } = createVideoLessonDto;
+    const { disciplineId, title, duration } = createVideoLessonDto;
 
-    const classInstance = await this.classRepository.findOne({
-      where: { id: classId },
-      relations: ['teacher'],
+    // Verifica se usuário é professor de alguma turma da disciplina
+    const classOfDiscipline = await this.classRepository.findOne({
+      where: {
+        discipline: { id: disciplineId },
+        teacher: { id: uploaderId },
+      },
+      relations: ['discipline', 'teacher'],
     });
 
-    if (!classInstance) {
-      throw new NotFoundException(`Turma com ID "${classId}" não encontrada.`);
-    }
-
-    if (classInstance.teacher?.id !== uploaderId) {
-      throw new ForbiddenException('Você não tem permissão para adicionar vídeos a esta turma.');
+    if (!classOfDiscipline) {
+      throw new ForbiddenException('Você não tem permissão para adicionar vídeos nesta disciplina.');
     }
 
     // Método legado - criar com campos antigos se disponíveis
     const newVideoLesson = this.videoLessonRepository.create({
       title,
-      videoUrl: videoUrl || null,
       durationSeconds: duration ? duration * 60 : null, // Converter minutos para segundos
-      class: { id: classId },
-      teacher: { id: uploaderId },
-      objectKey: videoUrl ? `legacy-${nanoid()}` : `${this.bucketName}/${classId}/${nanoid()}/${uploaderId}/video.mp4`,
+      discipline: { id: disciplineId },
+      uploadedBy: { id: uploaderId },
+      objectKey: null,
       status: 'ready',
       visibility: 'class',
       attachmentUrls: [],
@@ -226,17 +348,17 @@ export class VideoLessonsService {
     return this.videoLessonRepository.save(newVideoLesson);
   }
 
-  async findAllByClass(classId: string, requestingUserId?: string): Promise<VideoLesson[]> {
+  async findAllByDiscipline(disciplineId: string, requestingUserId?: string): Promise<VideoLesson[]> {
     if (requestingUserId) {
-      await this.ensureUserCanViewClassContent(classId, requestingUserId);
+      await this.ensureUserCanViewDisciplineContent(disciplineId, requestingUserId);
     }
 
     return this.videoLessonRepository.find({
       where: { 
-        class: { id: classId },
+        discipline: { id: disciplineId },
         deletedAt: IsNull(), // Soft delete
       },
-      relations: ['teacher', 'class'],
+      relations: ['uploadedBy', 'discipline'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -247,7 +369,7 @@ export class VideoLessonsService {
         id,
         deletedAt: IsNull(), // Soft delete
       },
-      relations: ['class', 'teacher'],
+      relations: ['discipline', 'uploadedBy'],
     });
 
     if (!videoLesson) {
@@ -255,21 +377,21 @@ export class VideoLessonsService {
     }
 
     if (requestingUserId) {
-      await this.ensureUserCanViewClassContent(videoLesson.class.id, requestingUserId);
+      await this.ensureUserCanViewDisciplineContent(videoLesson.discipline.id, requestingUserId);
     }
 
     return videoLesson;
   }
 
-  async findWatchesByClass(classId: string, studentId: string) {
-    await this.ensureUserCanViewClassContent(classId, studentId);
+  async findWatchesByDiscipline(disciplineId: string, studentId: string) {
+    await this.ensureUserCanViewDisciplineContent(disciplineId, studentId);
     const watches = await this.videoLessonWatchRepository.find({
       where: { student: { id: studentId } },
-      relations: ['videoLesson', 'videoLesson.class'],
+      relations: ['videoLesson', 'videoLesson.discipline'],
       order: { watchedAt: 'DESC' },
     });
     return watches
-      .filter(w => w.videoLesson?.class?.id === classId)
+      .filter(w => w.videoLesson?.discipline?.id === disciplineId)
       .map(w => ({
         videoLessonId: w.videoLesson.id,
         watchedPercentage: Number(w.watchedPercentage),
@@ -287,15 +409,15 @@ export class VideoLessonsService {
           id,
           deletedAt: IsNull(), // Soft delete
         },
-        relations: ['teacher', 'class', 'uploadedBy'],
+        relations: ['discipline', 'uploadedBy'],
     });
     
     if (!videoLesson) {
         throw new NotFoundException(`Videoaula com ID "${id}" não encontrada.`);
     }
 
-    // Verificar se é professor da turma ou admin: usar teacher se disponível, senão usar uploadedBy (legado)
-    const ownerId = videoLesson.teacher?.id || videoLesson.uploadedBy?.id;
+    // Verificar permissão
+    const ownerId = videoLesson.uploadedBy?.id;
     if (!ownerId || ownerId !== requestingUserId) {
       throw new ForbiddenException('Você não tem permissão para editar este recurso.');
     }
@@ -323,15 +445,15 @@ export class VideoLessonsService {
           id,
           deletedAt: IsNull(), // Soft delete
         },
-        relations: ['teacher', 'class', 'uploadedBy'],
+        relations: ['discipline', 'uploadedBy'],
     });
 
     if (!videoLesson) {
         throw new NotFoundException(`Videoaula com ID "${id}" não encontrada.`);
     }
 
-    // Verificar se é professor da turma ou admin: usar teacher se disponível, senão usar uploadedBy (legado)
-    const ownerId = videoLesson.teacher?.id || videoLesson.uploadedBy?.id;
+    // Verificar permissão
+    const ownerId = videoLesson.uploadedBy?.id;
     if (!ownerId || ownerId !== requestingUserId) {
       throw new ForbiddenException('Você não tem permissão para remover este recurso.');
     }
@@ -342,8 +464,10 @@ export class VideoLessonsService {
 
     // Opcional: remover arquivo do storage
     try {
-      const path = videoLesson.objectKey.replace(`${this.bucketName}/`, '');
-      await this.storageService.deleteFileFrom(this.bucketName, path);
+      if (videoLesson.objectKey) {
+        const path = videoLesson.objectKey.replace(`${this.bucketName}/`, '');
+        await this.storageService.deleteFileFrom(this.bucketName, path);
+      }
     } catch (error) {
       // Ignora erros ao remover arquivo do storage
       console.error('Erro ao remover arquivo do storage:', error);
@@ -368,7 +492,7 @@ export class VideoLessonsService {
       throw new NotFoundException(`Estudante com ID "${studentId}" não encontrado.`);
     }
 
-    await this.ensureUserCanViewClassContent(videoLesson.class.id, studentId);
+    await this.ensureUserCanViewDisciplineContent(videoLesson.discipline.id, studentId);
 
     const clampedPercentage = Math.max(0, Math.min(100, watchedPercentage));
 
@@ -391,194 +515,34 @@ export class VideoLessonsService {
     return this.videoLessonWatchRepository.save(watch);
   }
 
-  /**
-   * Upload de anexos para uma video-aula
-   */
-  async uploadAttachments(
-    videoLessonId: string,
-    teacherId: string,
-    files: MulterFile[],
-  ): Promise<{
-    videoLessonId: string;
-    uploaded: { url: string; name: string }[];
-    attachmentUrls: string[];
-  }> {
-    if (!files || files.length === 0) {
-      throw new BadRequestException('Nenhum arquivo fornecido.');
-    }
+  // Anexos desabilitados: o fluxo atual permite apenas um arquivo de vídeo por video-aula.
 
-    const videoLesson = await this.videoLessonRepository.findOne({
-      where: { id: videoLessonId },
-      relations: ['class', 'teacher', 'uploadedBy'],
+  // Método para verificar se o usuário tem acesso ao conteúdo da disciplina
+  private async ensureUserCanViewDisciplineContent(disciplineId: string, userId: string): Promise<void> {
+    // Professor da disciplina (em qualquer turma)
+    const teachesInDiscipline = await this.classRepository.findOne({
+      where: {
+        discipline: { id: disciplineId },
+        teacher: { id: userId },
+      },
+      relations: ['discipline', 'teacher'],
     });
 
-    if (!videoLesson) {
-      throw new NotFoundException(`Video-aula com ID "${videoLessonId}" não encontrada.`);
+    if (teachesInDiscipline) {
+      return;
     }
 
-    // Verificar permissão: usar teacher se disponível, senão usar uploadedBy (legado)
-    const ownerId = videoLesson.teacher?.id || videoLesson.uploadedBy?.id;
-    if (!ownerId) {
-      throw new BadRequestException('Video-aula não possui professor associado.');
-    }
-
-    if (ownerId !== teacherId) {
-      throw new ForbiddenException('Você não tem permissão para adicionar anexos a esta video-aula.');
-    }
-
-    const classId = videoLesson.class.id;
-    const uploadedResults: { url: string; name: string }[] = [];
-
-    // Extrair path base da video-aula (sem o nome do arquivo de vídeo)
-    // Se objectKey não existir ou não seguir o padrão, construir manualmente
-    let basePath: string;
-    if (videoLesson.objectKey && videoLesson.objectKey.startsWith(`${this.bucketName}/`)) {
-      basePath = videoLesson.objectKey
-        .replace(`${this.bucketName}/`, '')
-        .replace(/\/video\.\w+$/, ''); // Remove /video.{ext}
-    } else {
-      // Construir path manualmente usando os IDs disponíveis
-      basePath = `${classId}/${videoLesson.id}/${ownerId}`;
-    }
-
-    for (const file of files) {
-      const sanitizedOriginalName = file.originalname
-        .normalize('NFKD')
-        .replace(/[^\w.\- ]+/g, '')
-        .replace(/\s+/g, '_')
-        .replace(/_{2,}/g, '_');
-
-      const uuid = nanoid();
-      const fileName = `${uuid}-${sanitizedOriginalName}`;
-      const storagePath = `${basePath}/${fileName}`;
-
-      const fileUrl = await this.storageService.uploadFileTo(
-        this.bucketName,
-        storagePath,
-        file.buffer,
-        file.mimetype || 'application/octet-stream',
-      );
-
-      uploadedResults.push({
-        url: fileUrl,
-        name: this.storageService.extractOriginalFileNameFromUrl(fileUrl),
-      });
-
-      const current = videoLesson.attachmentUrls || [];
-      videoLesson.attachmentUrls = [...current, fileUrl];
-    }
-
-    await this.videoLessonRepository.save(videoLesson);
-
-    return {
-      videoLessonId,
-      uploaded: uploadedResults,
-      attachmentUrls: videoLesson.attachmentUrls || [],
-    };
-  }
-
-  /**
-   * Lista anexos de uma video-aula
-   */
-  async listAttachments(videoLessonId: string): Promise<{
-    videoLessonId: string;
-    attachments: { url: string; name: string }[];
-  }> {
-    const videoLesson = await this.videoLessonRepository.findOne({
-      where: { id: videoLessonId },
+    // Estudante matriculado em qualquer turma da disciplina
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: {
+        class: { discipline: { id: disciplineId } },
+        student: { id: userId },
+      },
+      relations: ['class', 'class.discipline', 'student'],
     });
 
-    if (!videoLesson) {
-      throw new NotFoundException(`Video-aula com ID "${videoLessonId}" não encontrada.`);
-    }
-
-    const attachments = (videoLesson.attachmentUrls || []).map((url) => {
-      const path = this.storageService.extractPathFromUrl(url, this.bucketName);
-      const fileName = path ? path.split('/').pop() || 'arquivo' : 'arquivo';
-      // Remover UUID do início do nome
-      const parts = fileName.split('-');
-      const originalFileName = parts.length > 1 ? parts.slice(1).join('-') : fileName;
-      return {
-        url,
-        name: originalFileName,
-      };
-    });
-
-    return { videoLessonId, attachments };
-  }
-
-  /**
-   * Remove um anexo de uma video-aula
-   */
-  async removeAttachment(
-    videoLessonId: string,
-    attachmentUrl: string,
-    teacherId: string,
-  ): Promise<{
-    videoLessonId: string;
-    removedUrl: string;
-    attachmentUrls: string[];
-  }> {
-    if (!attachmentUrl) {
-      throw new BadRequestException('URL do anexo é obrigatória.');
-    }
-
-    const videoLesson = await this.videoLessonRepository.findOne({
-      where: { id: videoLessonId },
-      relations: ['teacher', 'uploadedBy'],
-    });
-
-    if (!videoLesson) {
-      throw new NotFoundException(`Video-aula com ID "${videoLessonId}" não encontrada.`);
-    }
-
-    // Verificar permissão: usar teacher se disponível, senão usar uploadedBy (legado)
-    const ownerId = videoLesson.teacher?.id || videoLesson.uploadedBy?.id;
-    if (!ownerId) {
-      throw new BadRequestException('Video-aula não possui professor associado.');
-    }
-
-    if (ownerId !== teacherId) {
-      throw new ForbiddenException('Você não tem permissão para remover anexos desta video-aula.');
-    }
-
-    const path = this.storageService.extractPathFromUrl(attachmentUrl, this.bucketName);
-    if (!path) {
-      throw new BadRequestException('URL inválida para o bucket de video-aulas.');
-    }
-
-    await this.storageService.deleteFileFrom(this.bucketName, path);
-
-    const remaining = (videoLesson.attachmentUrls || []).filter((u) => u !== attachmentUrl);
-    videoLesson.attachmentUrls = remaining;
-    await this.videoLessonRepository.save(videoLesson);
-
-    return {
-      videoLessonId,
-      removedUrl: attachmentUrl,
-      attachmentUrls: remaining,
-    };
-  }
-
-  // Método para verificar se o Usuario pertence a Classe da Videoaula
-  private async ensureUserCanViewClassContent(classId: string, userId: string): Promise<void> {
-    const classInstance = await this.classRepository.findOne({
-      where: { id: classId },
-      relations: ['teacher'],
-    });
-
-    if (!classInstance) {
-      throw new NotFoundException(`Turma com ID "${classId}" não encontrada.`);
-    }
-
-    const isTeacher = classInstance.teacher?.id === userId;
-    const isEnrolled = await this.enrollmentRepository.findOneBy({
-      class: { id: classId },
-      student: { id: userId },
-    });
-
-    if (!isTeacher && !isEnrolled) {
-      throw new ForbiddenException('Você não tem acesso ao conteúdo desta turma.');
+    if (!enrollment) {
+      throw new ForbiddenException('Você não tem acesso ao conteúdo desta disciplina.');
     }
   }
 }
