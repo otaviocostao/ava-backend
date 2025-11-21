@@ -4,6 +4,8 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Course } from './entities/course.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
+import { CourseDiscipline } from './entities/course-discipline.entity';
+import { CourseDisciplineStatus } from 'src/common/enums/course-discipline-status.enum';
 import { Repository, In, Brackets } from 'typeorm';
 import { Department } from 'src/departments/entities/department.entity';
 import { StudentCourse } from 'src/student-courses/entities/student-course.entity';
@@ -17,6 +19,8 @@ export class CoursesService {
     private readonly courseRepository: Repository<Course>,
     @InjectRepository(Discipline)
     private readonly disciplineRepository: Repository<Discipline>,
+    @InjectRepository(CourseDiscipline)
+    private readonly courseDisciplineRepository: Repository<CourseDiscipline>,
     @InjectRepository(Department)
     private readonly departmentRepository: Repository<Department>,
     @InjectRepository(StudentCourse)
@@ -76,15 +80,15 @@ export class CoursesService {
       .createQueryBuilder('course')
       .leftJoinAndSelect('course.department', 'department')
       .loadRelationCountAndMap('course.studentsCount', 'course.studentCourses')
-      .loadRelationCountAndMap('course.disciplinesCount', 'course.disciplines');
+      .loadRelationCountAndMap('course.disciplinesCount', 'course.courseDisciplines');
 
     query.addSelect((subQuery) => {
       return subQuery
         .select('COUNT(class.id)')
         .from(Class, 'class')
         .leftJoin('class.discipline', 'discipline')
-        .leftJoin('discipline.courses', 'course_join')
-        .where('course_join.id = course.id');
+        .leftJoin('discipline.courseDisciplines', 'course_discipline')
+        .where('course_discipline.course.id = course.id');
     }, 'course_classesCount');
     
     if (filters.departmentId) {
@@ -120,12 +124,20 @@ export class CoursesService {
   async findOne(id: string): Promise<Course> {
     const course = await this.courseRepository.findOne({
       where: { id },
-      relations: ['disciplines', 'department'],
+      relations: ['courseDisciplines', 'courseDisciplines.discipline', 'department'],
     });
 
     if(!course){
       throw new NotFoundException(`Curso com o ID '${id}' não encontrado.`)
     }
+
+    // Mapear courseDisciplines para disciplinas com status e semestre
+    (course as any).disciplines = (course.courseDisciplines || []).map((cd) => ({
+      ...cd.discipline,
+      status: cd.status,
+      semester: cd.semester,
+    }));
+
     return course;
   }
 
@@ -155,14 +167,17 @@ export class CoursesService {
   async findClasses(courseId: string): Promise<Class[]> {
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
-      relations: ['disciplines'],
+      relations: ['courseDisciplines', 'courseDisciplines.discipline'],
     });
 
     if (!course) {
       throw new NotFoundException(`Curso com o ID '${courseId}' nao encontrado.`);
     }
 
-    const disciplineIds = (course.disciplines ?? []).map((discipline) => discipline.id);
+    const disciplineIds = (course.courseDisciplines ?? [])
+      .filter((cd) => cd.status === CourseDisciplineStatus.ACTIVE)
+      .map((cd) => cd.discipline.id);
+    
     if (disciplineIds.length === 0) {
       return [];
     }
@@ -173,10 +188,9 @@ export class CoursesService {
       order: { code: 'ASC' },
     });
   }
-  async associateDiscipline(courseId: string, disciplineId: string): Promise<Course> {
+  async associateDiscipline(courseId: string, disciplineId: string, semester?: number): Promise<Course> {
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
-      relations: ['disciplines'],
     });
 
     if (!course) {
@@ -185,60 +199,110 @@ export class CoursesService {
 
     const discipline = await this.disciplineRepository.findOne({
       where: { id: disciplineId },
-      relations: { courses: true },
     });
 
     if (!discipline) {
       throw new NotFoundException(`Disciplina com o ID '${disciplineId}' nao encontrada.`);
     }
 
-    const alreadyLinked = (course.disciplines ?? []).some((d) => d.id === discipline.id);
-    if (alreadyLinked) {
+    const existing = await this.courseDisciplineRepository.findOne({
+      where: { course: { id: courseId }, discipline: { id: disciplineId } },
+    });
+
+    if (existing) {
       throw new ConflictException('A disciplina ja esta associada a este curso.');
     }
 
-    course.disciplines = [...(course.disciplines ?? []), discipline];
-    await this.courseRepository.save(course);
+    const courseDiscipline = this.courseDisciplineRepository.create({
+      course,
+      discipline,
+      status: CourseDisciplineStatus.ACTIVE,
+      semester: semester ?? undefined,
+    });
 
-    return (await this.courseRepository.findOne({
-      where: { id: course.id },
-      relations: ['disciplines'],
-    })) as Course;
+    await this.courseDisciplineRepository.save(courseDiscipline);
+
+    return this.findOne(courseId);
   }
 
   async dissociateDiscipline(courseId: string, disciplineId: string): Promise<Course> {
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
-      relations: ['disciplines'],
     });
 
     if (!course) {
       throw new NotFoundException(`Curso com o ID '${courseId}' nao encontrado.`);
     }
 
-    const discipline = await this.disciplineRepository.findOne({
-      where: { id: disciplineId },
-      relations: { courses: true },
+    const courseDiscipline = await this.courseDisciplineRepository.findOne({
+      where: { course: { id: courseId }, discipline: { id: disciplineId } },
     });
 
-    if (!discipline) {
-      throw new NotFoundException(`Disciplina com o ID '${disciplineId}' nao encontrada.`);
-    }
-
-    const existsInCourse = (course.disciplines ?? []).some(d => d.id === disciplineId);
-    if (!existsInCourse) {
+    if (!courseDiscipline) {
       // Nada a fazer; manter resposta coerente retornando o curso atual
-      return course;
+      return this.findOne(courseId);
     }
 
-    course.disciplines = (course.disciplines ?? []).filter(
-      (current) => current.id !== disciplineId,
-    );
-    await this.courseRepository.save(course);
+    await this.courseDisciplineRepository.remove(courseDiscipline);
 
-    return (await this.courseRepository.findOne({
-      where: { id: course.id },
-      relations: ['disciplines'],
-    })) as Course;
+    return this.findOne(courseId);
+  }
+
+  async toggleDisciplineStatus(
+    courseId: string,
+    disciplineId: string,
+    status: CourseDisciplineStatus,
+  ): Promise<Course> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso com o ID '${courseId}' nao encontrado.`);
+    }
+
+    const courseDiscipline = await this.courseDisciplineRepository.findOne({
+      where: { course: { id: courseId }, discipline: { id: disciplineId } },
+    });
+
+    if (!courseDiscipline) {
+      throw new NotFoundException(
+        `A disciplina com o ID '${disciplineId}' nao esta associada ao curso '${courseId}'.`,
+      );
+    }
+
+    courseDiscipline.status = status;
+    await this.courseDisciplineRepository.save(courseDiscipline);
+
+    return this.findOne(courseId);
+  }
+
+  async updateDisciplineSemester(
+    courseId: string,
+    disciplineId: string,
+    semester?: number,
+  ): Promise<Course> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso com o ID '${courseId}' nao encontrado.`);
+    }
+
+    const courseDiscipline = await this.courseDisciplineRepository.findOne({
+      where: { course: { id: courseId }, discipline: { id: disciplineId } },
+    });
+
+    if (!courseDiscipline) {
+      throw new NotFoundException(
+        `A disciplina com o ID '${disciplineId}' nao esta associada ao curso '${courseId}'.`,
+      );
+    }
+
+    courseDiscipline.semester = semester ?? null;
+    await this.courseDisciplineRepository.save(courseDiscipline);
+
+    return this.findOne(courseId);
   }
 }

@@ -3,6 +3,9 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { ToggleDisciplineStatusDto } from './dto/toggle-discipline-status.dto';
+import { AssociateDisciplineDto } from './dto/associate-discipline.dto';
+import { UpdateDisciplineSemesterDto } from './dto/update-discipline-semester.dto';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -52,9 +55,41 @@ export class CoursesController {
   @ApiOperation({ summary: 'Associa uma disciplina existente a um curso.' })
   associateDiscipline(
     @Param('courseId', ParseUUIDPipe) courseId: string,
-    @Body('disciplineId', ParseUUIDPipe) disciplineId: string,
+    @Body() associateDisciplineDto: AssociateDisciplineDto,
   ) {
-    return this.coursesService.associateDiscipline(courseId, disciplineId);
+    return this.coursesService.associateDiscipline(
+      courseId,
+      associateDisciplineDto.disciplineId,
+      associateDisciplineDto.semester,
+    );
+  }
+
+  @Patch(':courseId/disciplines/:disciplineId/status')
+  @ApiOperation({ summary: 'Atualiza o status de uma disciplina no curso (ativa/inativa).' })
+  toggleDisciplineStatus(
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
+    @Body() toggleDisciplineStatusDto: ToggleDisciplineStatusDto,
+  ) {
+    return this.coursesService.toggleDisciplineStatus(
+      courseId,
+      disciplineId,
+      toggleDisciplineStatusDto.status,
+    );
+  }
+
+  @Patch(':courseId/disciplines/:disciplineId/semester')
+  @ApiOperation({ summary: 'Atualiza o semestre de uma disciplina no curso.' })
+  updateDisciplineSemester(
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
+    @Body() updateDisciplineSemesterDto: UpdateDisciplineSemesterDto,
+  ) {
+    return this.coursesService.updateDisciplineSemester(
+      courseId,
+      disciplineId,
+      updateDisciplineSemesterDto.semester,
+    );
   }
 
   @Delete(':courseId/disciplines/:disciplineId')

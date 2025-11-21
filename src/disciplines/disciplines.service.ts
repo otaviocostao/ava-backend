@@ -3,6 +3,8 @@ import { CreateDisciplineDto } from './dto/create-discipline.dto';
 import { UpdateDisciplineDto } from './dto/update-discipline.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Discipline } from './entities/discipline.entity';
+import { CourseDiscipline } from 'src/courses/entities/course-discipline.entity';
+import { CourseDisciplineStatus } from 'src/common/enums/course-discipline-status.enum';
 import { ILike, In, Not, Repository } from 'typeorm';
 import { Course } from 'src/courses/entities/course.entity';
 
@@ -14,6 +16,8 @@ export class DisciplinesService {
     private readonly disciplineRepository: Repository<Discipline>,
     @InjectRepository(Course)
     private readonly courseRepository: Repository<Course>,
+    @InjectRepository(CourseDiscipline)
+    private readonly courseDisciplineRepository: Repository<CourseDiscipline>,
   ) {}
 
   // Criar nova Disciplina
@@ -40,14 +44,27 @@ export class DisciplinesService {
       throw new NotFoundException('Um ou mais courseIds não foram encontrados.');
     }
 
+    // Criar a disciplina primeiro
     const discipline = this.disciplineRepository.create({
       name: createDisciplineDto.name,
       credits: createDisciplineDto.credits,
       workLoad: createDisciplineDto.workload,
-      courses,
     });
 
-    return await this.disciplineRepository.save(discipline);
+    const savedDiscipline = await this.disciplineRepository.save(discipline);
+
+    // Criar as associações CourseDiscipline para cada curso
+    const courseDisciplines = courses.map((course) =>
+      this.courseDisciplineRepository.create({
+        course,
+        discipline: savedDiscipline,
+        status: CourseDisciplineStatus.ACTIVE,
+      }),
+    );
+
+    await this.courseDisciplineRepository.save(courseDisciplines);
+
+    return savedDiscipline;
   }
 
   // Buscar todas as Disciplina
@@ -67,6 +84,12 @@ export class DisciplinesService {
 
   //Atualizar Disciplina
   async update(id: string, updateDisciplineDto: UpdateDisciplineDto): Promise<Discipline> {
+    const discipline = await this.disciplineRepository.findOneBy({ id });
+
+    if (!discipline) {
+      throw new NotFoundException(`Disciplina com o ID '${id}' não encontrada.`);
+    }
+
     if (updateDisciplineDto.name) {
       const conflict = await this.disciplineRepository.findOne({
         where: {
@@ -77,14 +100,15 @@ export class DisciplinesService {
       if (conflict) {
         throw new ConflictException('Já existe uma disciplina com este nome.');
       }
+      discipline.name = updateDisciplineDto.name;
     }
-    const discipline = await this.disciplineRepository.preload({ 
-      id,
-      ...updateDisciplineDto,
-    });
 
-    if(!discipline){
-      throw new NotFoundException(`Disciplina com o ID '${id}' não encontrada.`)
+    if (updateDisciplineDto.credits !== undefined) {
+      discipline.credits = updateDisciplineDto.credits;
+    }
+
+    if (updateDisciplineDto.workload !== undefined) {
+      discipline.workLoad = updateDisciplineDto.workload;
     }
 
     return await this.disciplineRepository.save(discipline);

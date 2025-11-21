@@ -1,4 +1,15 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateDisciplineDto } from './create-discipline.dto';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
-export class UpdateDisciplineDto extends PartialType(CreateDisciplineDto) {}
+export class UpdateDisciplineDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsNumber()
+  @IsOptional()
+  credits?: number;
+
+  @IsNumber()
+  @IsOptional()
+  workload?: number;
+}

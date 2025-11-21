@@ -2,7 +2,8 @@ import { CourseStatus } from "src/common/enums/course-status.enum";
 import { Department } from "src/departments/entities/department.entity";
 import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { StudentCourse } from "src/student-courses/entities/student-course.entity";
-import { Column, Entity, JoinColumn, ManyToMany, ManyToOne, PrimaryGeneratedColumn, JoinTable, OneToMany } from "typeorm";
+import { CourseDiscipline } from "./course-discipline.entity";
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, OneToMany } from "typeorm";
 
 @Entity("courses")
 export class Course {
@@ -42,13 +43,8 @@ export class Course {
     @Column({ type: 'int', default: 0 })
     classesCount: number;
 
-    @ManyToMany(() => Discipline, (discipline) => discipline.courses)
-    @JoinTable({
-      name: 'courses_disciplines',
-      joinColumn: { name: 'course_id', referencedColumnName: 'id' },
-      inverseJoinColumn: { name: 'discipline_id', referencedColumnName: 'id' },
-    })
-    disciplines: Discipline[];
+    @OneToMany(() => CourseDiscipline, (courseDiscipline) => courseDiscipline.course)
+    courseDisciplines: CourseDiscipline[];
 
     @OneToMany(() => StudentCourse, (studentCourse) => studentCourse.course)
     studentCourses: StudentCourse[];

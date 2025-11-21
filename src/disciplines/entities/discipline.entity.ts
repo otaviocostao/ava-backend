@@ -1,6 +1,6 @@
 import { Class } from "src/classes/entities/class.entity";
-import { Course } from "src/courses/entities/course.entity";
-import { Column, Entity, ManyToMany, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { CourseDiscipline } from "src/courses/entities/course-discipline.entity";
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity("disciplines")
 export class Discipline {
@@ -10,8 +10,8 @@ export class Discipline {
     @Column({ length: 255, unique: true, nullable: false })
     name: string;
 
-    @ManyToMany(() => Course, (course) => course.disciplines)
-    courses: Course[];
+    @OneToMany(() => CourseDiscipline, (courseDiscipline) => courseDiscipline.discipline)
+    courseDisciplines: CourseDiscipline[];
 
     @Column({ type: 'int', name: 'workload', default: 0 })
     workLoad: number;
