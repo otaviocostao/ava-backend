@@ -1,6 +1,7 @@
 import { Course } from './course.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
 import { CourseDisciplineStatus } from 'src/common/enums/course-discipline-status.enum';
+import { CourseDisciplineType } from 'src/common/enums/course-discipline-type.enum';
 import { Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Column, Unique } from 'typeorm';
 
 @Unique(['course', 'discipline'])
@@ -29,6 +30,13 @@ export class CourseDiscipline {
     default: CourseDisciplineStatus.ACTIVE,
   })
   status: CourseDisciplineStatus;
+
+  @Column({
+    type: 'enum',
+    enum: CourseDisciplineType,
+    default: CourseDisciplineType.REQUIRED,
+  })
+  type: CourseDisciplineType;
 
   @Column({ type: 'int', nullable: true })
   semester: number | null;

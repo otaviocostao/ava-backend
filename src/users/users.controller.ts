@@ -15,11 +15,15 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { StudentsService } from 'src/students/students.service';
 
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly studentsService: StudentsService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Cria um novo usuário na plataforma.' })
@@ -101,6 +105,12 @@ export class UsersController {
   @Get(':studentId/performance')
   getStudentPerformance(@Param('studentId', ParseUUIDPipe) studentId: string) {
     return this.usersService.getStudentDesempenho(studentId);
+  }
+
+  @Get(':studentId/curriculum')
+  @ApiOperation({ summary: 'Retorna a grade curricular completa do aluno com todas as disciplinas agrupadas por semestre.' })
+  getStudentCurriculum(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.studentsService.getStudentCurriculum(studentId);
   }
 
   @Get(':id/departments')

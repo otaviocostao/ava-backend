@@ -9,6 +9,10 @@ import { Attendance } from '../attendances/entities/attendance.entity';
 import { Activity } from '../activities/entities/activity.entity';
 import { ActivitySubmission } from '../activities/entities/activity-submission.entity';
 import { Schedule } from '../schedules/entities/schedule.entity';
+import { StudentCourse } from '../student-courses/entities/student-course.entity';
+import { CourseDiscipline } from '../courses/entities/course-discipline.entity';
+import { Discipline } from '../disciplines/entities/discipline.entity';
+import { Class } from '../classes/entities/class.entity';
 
 @Module({
   imports: [
@@ -20,6 +24,10 @@ import { Schedule } from '../schedules/entities/schedule.entity';
       Activity,
       ActivitySubmission,
       Schedule,
+      StudentCourse,
+      CourseDiscipline,
+      Discipline,
+      Class,
     ]),
   ],
   controllers: [StudentsController],

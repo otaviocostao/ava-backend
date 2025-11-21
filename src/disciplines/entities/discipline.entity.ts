@@ -10,6 +10,9 @@ export class Discipline {
     @Column({ length: 255, unique: true, nullable: false })
     name: string;
 
+    @Column({ length: 20, nullable: true })
+    code: string;
+
     @OneToMany(() => CourseDiscipline, (courseDiscipline) => courseDiscipline.discipline)
     courseDisciplines: CourseDiscipline[];
 

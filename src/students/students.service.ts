@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { Enrollment } from '../enrollments/entities/enrollment.entity';
 import { Grade } from '../grades/entities/grade.entity';
@@ -9,6 +9,11 @@ import { Activity } from '../activities/entities/activity.entity';
 import { ActivitySubmission } from '../activities/entities/activity-submission.entity';
 import { Schedule } from '../schedules/entities/schedule.entity';
 import { Class } from 'src/classes/entities/class.entity';
+import { StudentCourse } from 'src/student-courses/entities/student-course.entity';
+import { CourseDiscipline } from 'src/courses/entities/course-discipline.entity';
+import { Discipline } from 'src/disciplines/entities/discipline.entity';
+import { CourseDisciplineType } from 'src/common/enums/course-discipline-type.enum';
+import { StudentCurriculumDto, CurriculumDisciplineDto } from './dto/curriculum.dto';
 
 export interface DashboardSummary {
   overallAttendance: number;
@@ -73,6 +78,14 @@ export class StudentsService {
     private readonly activitySubmissionRepository: Repository<ActivitySubmission>,
     @InjectRepository(Schedule)
     private readonly scheduleRepository: Repository<Schedule>,
+    @InjectRepository(StudentCourse)
+    private readonly studentCourseRepository: Repository<StudentCourse>,
+    @InjectRepository(CourseDiscipline)
+    private readonly courseDisciplineRepository: Repository<CourseDiscipline>,
+    @InjectRepository(Discipline)
+    private readonly disciplineRepository: Repository<Discipline>,
+    @InjectRepository(Class)
+    private readonly classRepository: Repository<Class>,
   ) {}
 
   private async ensureStudentExists(studentId: string): Promise<User> {
@@ -469,6 +482,228 @@ export class StudentsService {
     }
 
     return completedHours;
+  }
+
+  async getStudentCurriculum(studentId: string): Promise<StudentCurriculumDto> {
+    await this.ensureStudentExists(studentId);
+
+    // Busca o curso do aluno
+    const studentCourse = await this.studentCourseRepository.findOne({
+      where: { student: { id: studentId } },
+      relations: ['course'],
+    });
+
+    if (!studentCourse || !studentCourse.course) {
+      throw new NotFoundException(
+        `Aluno com ID "${studentId}" não está vinculado a nenhum curso.`,
+      );
+    }
+
+    const course = studentCourse.course;
+
+    // Busca todas as disciplinas do curso
+    const courseDisciplines = await this.courseDisciplineRepository.find({
+      where: { course: { id: course.id } },
+      relations: ['discipline'],
+    });
+
+    // Busca todos os enrollments do aluno
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['class', 'class.discipline'],
+    });
+
+    // Busca todas as notas e presenças do aluno
+    const enrollmentIds = enrollments.map((e) => e.id);
+    const [allGrades, allAttendances] = await Promise.all([
+      enrollmentIds.length > 0
+        ? this.gradesRepository.find({
+            where: { enrollment: { id: In(enrollmentIds) } },
+            relations: ['enrollment', 'activity'],
+          })
+        : [],
+      enrollmentIds.length > 0
+        ? this.attendanceRepository.find({
+            where: { enrollment: { id: In(enrollmentIds) } },
+            relations: ['enrollment'],
+          })
+        : [],
+    ]);
+
+    // Cria mapas para facilitar busca
+    const enrollmentsByDisciplineId = new Map<string, Enrollment[]>();
+    enrollments.forEach((enrollment) => {
+      const disciplineId = enrollment.class.discipline?.id;
+      if (disciplineId) {
+        if (!enrollmentsByDisciplineId.has(disciplineId)) {
+          enrollmentsByDisciplineId.set(disciplineId, []);
+        }
+        enrollmentsByDisciplineId.get(disciplineId)!.push(enrollment);
+      }
+    });
+
+    const gradesByEnrollmentId = new Map<string, Grade[]>();
+    allGrades.forEach((grade) => {
+      const enrollmentId = grade.enrollment.id;
+      if (!gradesByEnrollmentId.has(enrollmentId)) {
+        gradesByEnrollmentId.set(enrollmentId, []);
+      }
+      gradesByEnrollmentId.get(enrollmentId)!.push(grade);
+    });
+
+    const attendancesByEnrollmentId = new Map<string, Attendance[]>();
+    allAttendances.forEach((attendance) => {
+      const enrollmentId = attendance.enrollment.id;
+      if (!attendancesByEnrollmentId.has(enrollmentId)) {
+        attendancesByEnrollmentId.set(enrollmentId, []);
+      }
+      attendancesByEnrollmentId.get(enrollmentId)!.push(attendance);
+    });
+
+    // Determina o semestre atual (assumindo formato "YYYY.S" ou "YYYY-S")
+    const getCurrentSemester = (): string => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const semester = month <= 6 ? 1 : 2;
+      return `${year}.${semester}`;
+    };
+
+    const currentSemester = getCurrentSemester();
+    const MIN_APPROVAL_SCORE = 6.0;
+    const MIN_ATTENDANCE_PERCENTAGE = 75;
+
+    // Função auxiliar para calcular status da disciplina
+    const calculateDisciplineStatus = (
+      disciplineId: string,
+    ): {
+      status: 'Aprovado' | 'Reprovado' | 'Cursando' | 'Pendente';
+      finalGrade?: number;
+      absences?: number;
+      academicPeriod?: string;
+    } => {
+      const disciplineEnrollments = enrollmentsByDisciplineId.get(disciplineId) || [];
+
+      if (disciplineEnrollments.length === 0) {
+        return { status: 'Pendente' };
+      }
+
+      // Pega o enrollment mais recente
+      const latestEnrollment = disciplineEnrollments.sort(
+        (a, b) => (new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()),
+      )[0];
+
+      const classSemester = latestEnrollment.class.semester;
+      const enrollmentGrades = gradesByEnrollmentId.get(latestEnrollment.id) || [];
+      const enrollmentAttendances = attendancesByEnrollmentId.get(latestEnrollment.id) || [];
+
+      // Calcula nota final (média das notas)
+      const finalGrade =
+        enrollmentGrades.length > 0
+          ? enrollmentGrades.reduce((sum, g) => sum + Number(g.score), 0) / enrollmentGrades.length
+          : undefined;
+
+      // Calcula faltas (presenças onde present = false)
+      const absences = enrollmentAttendances.filter((a) => !a.present).length;
+
+      // Calcula porcentagem de presença
+      const totalAttendances = enrollmentAttendances.length;
+      const presentCount = enrollmentAttendances.filter((a) => a.present).length;
+      const attendancePercentage =
+        totalAttendances > 0 ? (presentCount / totalAttendances) * 100 : 100;
+
+      // Determina se está cursando (semestre atual)
+      const isCurrentSemester = classSemester === currentSemester || 
+                                 classSemester === currentSemester.replace('.', '-');
+
+      if (isCurrentSemester) {
+        return { status: 'Cursando', finalGrade, absences, academicPeriod: classSemester };
+      }
+
+      // Disciplina finalizada - verifica aprovação
+      if (
+        finalGrade !== undefined &&
+        finalGrade >= MIN_APPROVAL_SCORE &&
+        attendancePercentage >= MIN_ATTENDANCE_PERCENTAGE
+      ) {
+        return { status: 'Aprovado', finalGrade, absences, academicPeriod: classSemester };
+      } else {
+        return { status: 'Reprovado', finalGrade, absences, academicPeriod: classSemester };
+      }
+    };
+
+    // Mapeia disciplinas do curso
+    const disciplines: (CurriculumDisciplineDto & { semester: number | string | null })[] = courseDisciplines.map((cd) => {
+      const discipline = cd.discipline;
+      const disciplineStatus = calculateDisciplineStatus(discipline.id);
+
+      return {
+        id: discipline.id,
+        code: discipline.code || null,
+        name: discipline.name,
+        academicPeriod: disciplineStatus.academicPeriod || null,
+        status: disciplineStatus.status,
+        finalGrade: disciplineStatus.finalGrade,
+        absences: disciplineStatus.absences,
+        credits: discipline.credits || 0,
+        workload: discipline.workLoad || 0,
+        type: cd.type === CourseDisciplineType.REQUIRED ? 'required' : 'optional',
+        semester: cd.semester || 'Sem semestre',
+      };
+    });
+
+    // Agrupa por semestre
+    const semesterMap = new Map<number | string, CurriculumDisciplineDto[]>();
+    disciplines.forEach((discipline) => {
+      const semester = discipline.semester || 'Sem semestre';
+      if (!semesterMap.has(semester)) {
+        semesterMap.set(semester, []);
+      }
+      // Remove a propriedade semester do objeto antes de adicionar ao mapa
+      const { semester: _, ...disciplineDto } = discipline;
+      semesterMap.get(semester)!.push(disciplineDto);
+    });
+
+    const semesters = Array.from(semesterMap.entries())
+      .sort((a, b) => {
+        // Ordena por semestre numérico ou alfabeticamente
+        const aNum = typeof a[0] === 'number' ? a[0] : 999;
+        const bNum = typeof b[0] === 'number' ? b[0] : 999;
+        return aNum - bNum;
+      })
+      .map(([semester, disciplines]) => ({
+        semester,
+        disciplines,
+      }));
+
+    // Calcula resumo
+    const requiredDisciplines = disciplines.filter((d) => d.type === 'required');
+    const optionalDisciplines = disciplines.filter((d) => d.type === 'optional');
+
+    const summary = {
+      totalHours: disciplines.reduce((sum, d) => sum + d.workload, 0),
+      completedHours: disciplines
+        .filter((d) => d.status === 'Aprovado')
+        .reduce((sum, d) => sum + d.workload, 0),
+      requiredDisciplines: {
+        completed: requiredDisciplines.filter((d) => d.status === 'Aprovado').length,
+        total: requiredDisciplines.length,
+      },
+      optionalDisciplines: {
+        completed: optionalDisciplines.filter((d) => d.status === 'Aprovado').length,
+        total: optionalDisciplines.length,
+      },
+    };
+
+    return {
+      course: {
+        id: course.id,
+        name: course.name,
+        code: course.code || null,
+      },
+      summary,
+      semesters,
+    };
   }
 }
 

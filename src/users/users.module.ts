@@ -7,10 +7,12 @@ import { Role } from 'src/roles/entities/role.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { Grade } from 'src/grades/entities/grade.entity';
+import { StudentsModule } from 'src/students/students.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Role, Enrollment, Attendance, Grade]),
+    StudentsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],
