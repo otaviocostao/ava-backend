@@ -19,9 +19,8 @@ export class ClassesController {
 
   @Get()
   @ApiOperation({ summary: 'Lista todas as turmas cadastradas.' })
-  findAll() {
-    return this.classesService.findAll();
-    
+  findAll(@Query('courseId') courseId?: string) {
+    return this.classesService.findAll(courseId);
   }
 
   @Get('teacher/:teacherId')

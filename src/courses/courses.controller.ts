@@ -35,6 +35,13 @@ export class CoursesController {
     return this.coursesService.findOne(id);
   }
 
+
+  @Get(':id/classes')
+  @ApiOperation({ summary: 'Lista as turmas cujas disciplinas pertencem ao curso informado.' })
+  findClasses(@Param('id', ParseUUIDPipe) id: string) {
+    return this.coursesService.findClasses(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza informações de um curso.' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() updateCourseDto: UpdateCourseDto) {

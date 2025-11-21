@@ -43,6 +43,7 @@ export class DisciplinesService {
     const discipline = this.disciplineRepository.create({
       name: createDisciplineDto.name,
       credits: createDisciplineDto.credits,
+      workLoad: createDisciplineDto.workload,
       courses,
     });
 

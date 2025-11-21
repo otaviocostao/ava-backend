@@ -57,9 +57,21 @@ export class ClassesService {
     return this.classRepository.save(newClass);
   }
 
-  // Buscar todas as Classes
-  findAll() : Promise<Class[]> {
-    return this.classRepository.find();
+  // Buscar todas as Classes (opcionalmente filtrando por curso via disciplinas)
+  findAll(courseId?: string) : Promise<Class[]> {
+    if (courseId) {
+      return this.classRepository
+        .createQueryBuilder('class')
+        .leftJoinAndSelect('class.discipline', 'discipline')
+        .leftJoinAndSelect('class.teacher', 'teacher')
+        .leftJoin('discipline.courses', 'course')
+        .where('course.id = :courseId', { courseId })
+        .getMany();
+    }
+
+    return this.classRepository.find({
+      relations: ['discipline', 'teacher'],
+    });
   }
 
   // Buscar Classe por id

@@ -7,6 +7,7 @@ import { Discipline } from 'src/disciplines/entities/discipline.entity';
 import { Repository, In, Brackets } from 'typeorm';
 import { Department } from 'src/departments/entities/department.entity';
 import { StudentCourse } from 'src/student-courses/entities/student-course.entity';
+import { Class } from 'src/classes/entities/class.entity';
 
 @Injectable()
 export class CoursesService {
@@ -20,6 +21,8 @@ export class CoursesService {
     private readonly departmentRepository: Repository<Department>,
     @InjectRepository(StudentCourse)
     private readonly studentCourseRepository: Repository<StudentCourse>,
+    @InjectRepository(Class)
+    private readonly classRepository: Repository<Class>,
   ) {}
 
   // Criar novo Curso
@@ -78,9 +81,9 @@ export class CoursesService {
     query.addSelect((subQuery) => {
       return subQuery
         .select('COUNT(class.id)')
-        .from('classes', 'class')
-        .innerJoin('class.discipline', 'discipline')
-        .innerJoin('discipline.courses', 'course_join') 
+        .from(Class, 'class')
+        .leftJoin('class.discipline', 'discipline')
+        .leftJoin('discipline.courses', 'course_join')
         .where('course_join.id = course.id');
     }, 'course_classesCount');
     
@@ -110,14 +113,14 @@ export class CoursesService {
       delete (course as any).course_classesCount; 
     });
 
-    return query.getMany();
+    return courses;
   }
 
   // Buscar Curso por id
   async findOne(id: string): Promise<Course> {
     const course = await this.courseRepository.findOne({
       where: { id },
-      relations: ['disciplines'],
+      relations: ['disciplines', 'department'],
     });
 
     if(!course){
@@ -147,6 +150,28 @@ export class CoursesService {
     if (result.affected === 0) {
       throw new NotFoundException(`Deparatamento com o ID '${id}' não encontrado.`);
     }
+  }
+
+  async findClasses(courseId: string): Promise<Class[]> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['disciplines'],
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso com o ID '${courseId}' nao encontrado.`);
+    }
+
+    const disciplineIds = (course.disciplines ?? []).map((discipline) => discipline.id);
+    if (disciplineIds.length === 0) {
+      return [];
+    }
+
+    return this.classRepository.find({
+      where: { discipline: { id: In(disciplineIds) } },
+      relations: ['discipline', 'teacher'],
+      order: { code: 'ASC' },
+    });
   }
   async associateDiscipline(courseId: string, disciplineId: string): Promise<Course> {
     const course = await this.courseRepository.findOne({
