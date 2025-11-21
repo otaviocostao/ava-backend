@@ -1,10 +1,21 @@
-import './polyfills';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppContextService } from './app-context.service';
+
+const allowedOrigins = [
+  'http://localhost:3000',
+];
+
+export class SocketIoAdapter extends IoAdapter {
+  createIOServer(port: number, options?: any): any {
+    options.cors = { origin: allowedOrigins };
+    const server = super.createIOServer(port, options);
+    return server;
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -13,12 +24,18 @@ async function bootstrap() {
   appContextService.setApp(app);
 
   app.enableCors({
-    origin: '*',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Origem não permitida pelo CORS'));
+      }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
-  app.useWebSocketAdapter(new IoAdapter(app));
+  app.useWebSocketAdapter(new SocketIoAdapter(app));
   
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,6 +44,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Ava Backend API')
     .setDescription('Documentacao interativa com todos os endpoints REST expostos pela plataforma Ava.')
@@ -41,7 +59,7 @@ async function bootstrap() {
         description: 'Digite o token JWT obtido no endpoint /auth/login',
         in: 'header',
       },
-      'JWT-auth', // Este nome deve corresponder ao usado em @ApiBearerAuth('JWT-auth')
+      'JWT-auth',
     )
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
@@ -50,6 +68,10 @@ async function bootstrap() {
       tagsSorter: 'alpha',
     },
   });
-  await app.listen(process.env.PORT ?? 3001);
+
+  const port = process.env.PORT ?? 3001;
+  await app.listen(port);
+  console.log(`🚀 Aplicação rodando em: http://localhost:${port}`);
+  console.log(`📄 Documentação Swagger disponível em: http://localhost:${port}/api`);
 }
 bootstrap();

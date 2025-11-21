@@ -1,5 +1,4 @@
 import {
-  WebSocketGateway,
   SubscribeMessage,
   MessageBody,
   WebSocketServer,
@@ -7,7 +6,6 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
-@WebSocketGateway({ cors: { origin: '*' } })
 export class LiveClassGateway {
   @WebSocketServer()
   server: Server;
