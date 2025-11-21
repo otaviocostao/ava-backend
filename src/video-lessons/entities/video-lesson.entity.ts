@@ -4,6 +4,7 @@ import { User } from '../../users/entities/user.entity';
 import { FileUrlsTransformer } from '../../common/transformers/file-urls.transformer'; 
 
 @Entity('video_lessons')
+@Index('idx_video_lessons_discipline_order', ['discipline', 'order'])
 export class VideoLesson {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -24,6 +25,13 @@ export class VideoLesson {
 
   @Column({ name: 'duration_seconds', type: 'integer', nullable: true })
   durationSeconds: number | null;
+
+  @Column({ 
+    name: 'order', 
+    type: 'integer', 
+    nullable: true 
+  })
+  order: number | null;
 
   @Column({ 
     type: 'varchar', 

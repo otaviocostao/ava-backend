@@ -5,6 +5,7 @@ import { VideoLessonsService } from './video-lessons.service';
 import { CreateVideoLessonDto } from './dto/create-video-lesson.dto';
 import { CreateVideoLessonUploadDto } from './dto/create-video-lesson-upload.dto';
 import { UpdateVideoLessonDto } from './dto/update-video-lesson.dto';
+import { UpdateVideoLessonOrderDto } from './dto/update-video-lesson-order.dto';
 import { FinalizeVideoLessonDto } from './dto/finalize-video-lesson.dto';
 import { MarkVideoWatchedDto } from './dto/mark-video-watched.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.guard';
@@ -306,6 +307,51 @@ export class VideoLessonsController {
     return this.videoLessonsService.update(
       id,
       updateVideoLessonDto,
+      requestingUserId,
+    );
+  }
+
+  @Patch('disciplines/:disciplineId/reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ 
+    summary: 'Reordena as vídeo-aulas de uma disciplina.',
+    description: 'Atualiza a ordem de múltiplas vídeo-aulas em uma disciplina. A ordem deve ser única dentro da disciplina.',
+  })
+  @ApiParam({ name: 'disciplineId', description: 'ID da disciplina', type: String, format: 'uuid' })
+  @ApiOkResponse({
+    description: 'Ordem atualizada com sucesso',
+    schema: {
+      example: [
+        {
+          id: 'a0b12c3d-4e5f-6789-0123-456789abcdef',
+          title: 'Aula 01',
+          order: 1,
+        },
+        {
+          id: 'b1c23d4e-5f67-8901-2345-6789bcdef012',
+          title: 'Aula 02',
+          order: 2,
+        },
+      ],
+    },
+  })
+  @ApiBadRequestResponse({ description: 'Dados inválidos ou ordens duplicadas' })
+  @ApiUnauthorizedResponse({ description: 'Token JWT inválido ou não fornecido' })
+  @ApiForbiddenResponse({ description: 'Usuário não tem permissão para reordenar vídeo-aulas nesta disciplina' })
+  @ApiNotFoundResponse({ description: 'Disciplina não encontrada' })
+  reorderVideoLessons(
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
+    @Body() updateOrderDto: UpdateVideoLessonOrderDto,
+    @Req() req: any,
+  ) {
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('Usuário não autenticado. Token JWT necessário.');
+    }
+    const requestingUserId = req.user.id;
+    return this.videoLessonsService.updateVideoLessonsOrder(
+      disciplineId,
+      updateOrderDto,
       requestingUserId,
     );
   }

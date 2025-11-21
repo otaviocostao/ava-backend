@@ -1,14 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, In, DataSource } from 'typeorm';
 import { CreateVideoLessonDto } from './dto/create-video-lesson.dto';
 import { CreateVideoLessonUploadDto } from './dto/create-video-lesson-upload.dto';
 import { UpdateVideoLessonDto } from './dto/update-video-lesson.dto';
+import { UpdateVideoLessonOrderDto } from './dto/update-video-lesson-order.dto';
 import { VideoLesson } from './entities/video-lesson.entity';
 import { VideoLessonWatch } from './entities/video-lesson-watch.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { User } from 'src/users/entities/user.entity';
+import { Department } from 'src/departments/entities/department.entity';
+import { CourseDiscipline } from 'src/courses/entities/course-discipline.entity';
 import { StorageService } from 'src/storage/storage.service';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
@@ -29,8 +32,13 @@ export class VideoLessonsService {
     private readonly enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Department)
+    private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(CourseDiscipline)
+    private readonly courseDisciplineRepository: Repository<CourseDiscipline>,
     private readonly storageService: StorageService,
     private readonly configService: ConfigService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -46,20 +54,17 @@ export class VideoLessonsService {
     uploadUrl: string;
     expiresInSeconds: number;
   }> {
-    // Verificar se o usuário é professor de alguma turma da disciplina informada
-    const classOfDiscipline = await this.classRepository.findOne({
-      where: {
-        discipline: { id: disciplineId },
-        teacher: { id: teacherId },
-      },
-      relations: ['discipline', 'teacher'],
-    });
-
-    if (!classOfDiscipline) {
+    // Verificar se o usuário pode criar vídeo-aulas na disciplina (professor OU coordenador)
+    const canCreate = await this.ensureUserCanEditDisciplineContent(disciplineId, teacherId);
+    
+    if (!canCreate) {
       throw new ForbiddenException(
         'Você não tem permissão para adicionar vídeos nesta disciplina.',
       );
     }
+
+    // Calcular ordem: usar order fornecido ou próximo disponível
+    const order = createDto.order ?? await this.getNextOrderForDiscipline(disciplineId);
 
     // Criar registro no banco com status 'pending'
     const newVideoLesson = this.videoLessonRepository.create({
@@ -71,6 +76,7 @@ export class VideoLessonsService {
       status: 'pending',
       visibility: 'class',
       attachmentUrls: [],
+      order,
     });
 
     const savedVideoLesson = await this.videoLessonRepository.save(newVideoLesson);
@@ -112,16 +118,10 @@ export class VideoLessonsService {
     fileUrl: string;
     status: string;
   }> {
-    // Verificar se o usuário é professor de alguma turma da disciplina informada
-    const classOfDiscipline = await this.classRepository.findOne({
-      where: {
-        discipline: { id: disciplineId },
-        teacher: { id: teacherId },
-      },
-      relations: ['discipline', 'teacher'],
-    });
-
-    if (!classOfDiscipline) {
+    // Verificar se o usuário pode criar vídeo-aulas na disciplina (professor OU coordenador)
+    const canCreate = await this.ensureUserCanEditDisciplineContent(disciplineId, teacherId);
+    
+    if (!canCreate) {
       throw new ForbiddenException(
         'Você não tem permissão para adicionar vídeos nesta disciplina.',
       );
@@ -130,6 +130,9 @@ export class VideoLessonsService {
     if (!file) {
       throw new BadRequestException('Arquivo não enviado (campo "file" obrigatório).');
     }
+
+    // Calcular ordem: usar order fornecido ou próximo disponível
+    const order = createDto.order ?? await this.getNextOrderForDiscipline(disciplineId);
 
     // Criar registro no banco com status 'pending' e sem objectKey
     const newVideoLesson = this.videoLessonRepository.create({
@@ -141,6 +144,7 @@ export class VideoLessonsService {
       status: 'pending',
       visibility: 'class',
       attachmentUrls: [],
+      order,
     });
 
     const savedVideoLesson = await this.videoLessonRepository.save(newVideoLesson);
@@ -197,15 +201,19 @@ export class VideoLessonsService {
       throw new NotFoundException(`Video-aula com ID "${videoLessonId}" não encontrada.`);
     }
 
-    // Verificar permissão
+    // Verificar permissão - pode ser o criador ou coordenador do departamento
     const ownerId = videoLesson.uploadedBy?.id;
-    if (!ownerId || ownerId !== teacherId) {
-      throw new ForbiddenException('Você não tem permissão para enviar o vídeo desta video-aula.');
-    }
-
-    // Apenas um vídeo permitido: exige status 'pending'
-    if (videoLesson.status !== 'pending') {
-      throw new BadRequestException('Video-aula já possui vídeo enviado ou já foi finalizada.');
+    const isOwner = ownerId && ownerId === teacherId;
+    
+    if (!isOwner) {
+      // Verificar se é coordenador do departamento da disciplina
+      const canEdit = await this.ensureUserCanEditDisciplineContent(
+        videoLesson.discipline.id,
+        teacherId,
+      );
+      if (!canEdit) {
+        throw new ForbiddenException('Você não tem permissão para enviar o vídeo desta video-aula.');
+      }
     }
 
     // Garante objectKey no padrão exigido
@@ -216,13 +224,18 @@ export class VideoLessonsService {
 
     const path = videoLesson.objectKey.replace(`${this.bucketName}/`, '');
 
-    // Faz upload do arquivo para o bucket
+    // Faz upload do arquivo para o bucket (substitui arquivo existente se houver)
     const fileUrl = await this.storageService.uploadFileTo(
       this.bucketName,
       path,
       file.buffer,
       file.mimetype || 'application/octet-stream',
     );
+
+    // Marcar como ready se estava em outro status (permitir substituir arquivo)
+    if (videoLesson.status !== 'ready') {
+      videoLesson.status = 'ready';
+    }
 
     await this.videoLessonRepository.save(videoLesson);
 
@@ -359,7 +372,10 @@ export class VideoLessonsService {
         deletedAt: IsNull(), // Soft delete
       },
       relations: ['uploadedBy', 'discipline'],
-      order: { createdAt: 'DESC' },
+      order: { 
+        order: 'ASC',
+        createdAt: 'DESC' 
+      },
     });
   }
 
@@ -416,10 +432,19 @@ export class VideoLessonsService {
         throw new NotFoundException(`Videoaula com ID "${id}" não encontrada.`);
     }
 
-    // Verificar permissão
+    // Verificar permissão - pode ser o criador ou coordenador do departamento
     const ownerId = videoLesson.uploadedBy?.id;
-    if (!ownerId || ownerId !== requestingUserId) {
-      throw new ForbiddenException('Você não tem permissão para editar este recurso.');
+    const isOwner = ownerId && ownerId === requestingUserId;
+    
+    if (!isOwner) {
+      // Verificar se é coordenador do departamento da disciplina
+      const canEdit = await this.ensureUserCanEditDisciplineContent(
+        videoLesson.discipline.id,
+        requestingUserId,
+      );
+      if (!canEdit) {
+        throw new ForbiddenException('Você não tem permissão para editar este recurso.');
+      }
     }
 
     // Atualizar apenas campos permitidos
@@ -541,8 +566,158 @@ export class VideoLessonsService {
       relations: ['class', 'class.discipline', 'student'],
     });
 
-    if (!enrollment) {
-      throw new ForbiddenException('Você não tem acesso ao conteúdo desta disciplina.');
+    if (enrollment) {
+      return;
+    }
+
+    // Coordenador de um departamento que tem cursos com essa disciplina
+    const department = await this.departmentRepository.findOne({
+      where: {
+        coordinator: { id: userId },
+      },
+      relations: ['coordinator'],
+    });
+
+    if (department) {
+      // Usar query builder para verificar se há CourseDiscipline que liga
+      // a disciplina ao departamento através dos cursos
+      const courseDiscipline = await this.courseDisciplineRepository
+        .createQueryBuilder('cd')
+        .innerJoin('cd.course', 'course')
+        .innerJoin('cd.discipline', 'discipline')
+        .innerJoin('course.department', 'department')
+        .where('discipline.id = :disciplineId', { disciplineId })
+        .andWhere('department.id = :departmentId', { departmentId: department.id })
+        .getOne();
+
+      if (courseDiscipline) {
+        return;
+      }
+    }
+
+    throw new ForbiddenException('Você não tem acesso ao conteúdo desta disciplina.');
+  }
+
+  /**
+   * Verifica se o usuário pode editar conteúdo da disciplina
+   * Permite: professores da disciplina OU coordenadores do departamento
+   */
+  private async ensureUserCanEditDisciplineContent(disciplineId: string, userId: string): Promise<boolean> {
+    // Professor da disciplina (em qualquer turma)
+    const teachesInDiscipline = await this.classRepository.findOne({
+      where: {
+        discipline: { id: disciplineId },
+        teacher: { id: userId },
+      },
+      relations: ['discipline', 'teacher'],
+    });
+
+    if (teachesInDiscipline) {
+      return true;
+    }
+
+    // Coordenador de um departamento que tem cursos com essa disciplina
+    const department = await this.departmentRepository.findOne({
+      where: {
+        coordinator: { id: userId },
+      },
+      relations: ['coordinator'],
+    });
+
+    if (department) {
+      // Usar query builder para verificar se há CourseDiscipline que liga
+      // a disciplina ao departamento através dos cursos
+      const courseDiscipline = await this.courseDisciplineRepository
+        .createQueryBuilder('cd')
+        .innerJoin('cd.course', 'course')
+        .innerJoin('cd.discipline', 'discipline')
+        .innerJoin('course.department', 'department')
+        .where('discipline.id = :disciplineId', { disciplineId })
+        .andWhere('department.id = :departmentId', { departmentId: department.id })
+        .getOne();
+
+      if (courseDiscipline) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Calcula o próximo número de ordem disponível para uma disciplina
+   */
+  private async getNextOrderForDiscipline(disciplineId: string): Promise<number> {
+    const result = await this.videoLessonRepository
+      .createQueryBuilder('vl')
+      .select('MAX(vl.order)', 'maxOrder')
+      .where('vl.discipline_id = :disciplineId', { disciplineId })
+      .andWhere('vl.deleted_at IS NULL')
+      .getRawOne();
+
+    const maxOrder = result?.maxOrder ?? 0;
+    return maxOrder + 1;
+  }
+
+  /**
+   * Atualiza a ordem de múltiplas vídeo-aulas em uma disciplina
+   */
+  async updateVideoLessonsOrder(
+    disciplineId: string,
+    updateDto: UpdateVideoLessonOrderDto,
+    requestingUserId: string,
+  ): Promise<VideoLesson[]> {
+    // Verificar permissão
+    const canEdit = await this.ensureUserCanEditDisciplineContent(disciplineId, requestingUserId);
+    if (!canEdit) {
+      throw new ForbiddenException('Você não tem permissão para reordenar vídeo-aulas nesta disciplina.');
+    }
+
+    // Validar que todas as vídeo-aulas pertencem à disciplina
+    const videoLessonIds = updateDto.updates.map(u => u.id);
+    const videoLessons = await this.videoLessonRepository.find({
+      where: {
+        id: In(videoLessonIds),
+        discipline: { id: disciplineId },
+        deletedAt: IsNull(),
+      },
+      relations: ['discipline'],
+    });
+
+    if (videoLessons.length !== updateDto.updates.length) {
+      throw new BadRequestException('Uma ou mais vídeo-aulas não pertencem a esta disciplina ou não foram encontradas.');
+    }
+
+    // Validar que todas as ordens são únicas
+    const orders = updateDto.updates.map(u => u.order);
+    const uniqueOrders = new Set(orders);
+    if (uniqueOrders.size !== orders.length) {
+      throw new BadRequestException('As ordens devem ser únicas dentro da disciplina.');
+    }
+
+    // Atualizar em transação
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const update of updateDto.updates) {
+        await queryRunner.manager.update(
+          VideoLesson,
+          { id: update.id },
+          { order: update.order },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Retornar lista atualizada ordenada
+      return this.findAllByDiscipline(disciplineId, requestingUserId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 }

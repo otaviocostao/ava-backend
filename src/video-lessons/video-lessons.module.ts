@@ -8,12 +8,14 @@ import { Class } from 'src/classes/entities/class.entity';
 import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
+import { Department } from 'src/departments/entities/department.entity';
+import { CourseDiscipline } from 'src/courses/entities/course-discipline.entity';
 import { StorageModule } from 'src/storage/storage.module';
 import { PassportModule } from '@nestjs/passport';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([VideoLesson, VideoLessonWatch, Class, Enrollment, User, Discipline]),
+    TypeOrmModule.forFeature([VideoLesson, VideoLessonWatch, Class, Enrollment, User, Discipline, Department, CourseDiscipline]),
     StorageModule,
     PassportModule,
   ],

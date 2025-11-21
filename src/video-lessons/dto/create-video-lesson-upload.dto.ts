@@ -56,5 +56,21 @@ export class CreateVideoLessonUploadDto {
   @Min(1)
   @Max(10 * 1024 * 1024 * 1024) // 10GB máximo
   sizeBytes?: number;
+
+  @ApiPropertyOptional({
+    description: 'Ordem da video-aula na disciplina (opcional, será calculada automaticamente se não fornecido)',
+    example: 1,
+    minimum: 1,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const num = Number(value);
+    return isNaN(num) ? undefined : num;
+  })
+  @ValidateIf((o) => o.order !== undefined && o.order !== null)
+  @IsNumber({}, { message: 'order deve ser um número' })
+  @Min(1)
+  order?: number;
 }
 
