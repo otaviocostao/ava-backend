@@ -3,9 +3,20 @@ import {
   MessageBody,
   WebSocketServer,
   ConnectedSocket,
+  WebSocketGateway,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
+@WebSocketGateway({
+  cors: {
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+})
 export class LiveClassGateway {
   @WebSocketServer()
   server: Server;

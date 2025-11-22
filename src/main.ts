@@ -7,6 +7,7 @@ import { AppContextService } from './app-context.service';
 
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001',
 ];
 
 export class SocketIoAdapter extends IoAdapter {
@@ -35,7 +36,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.useWebSocketAdapter(new SocketIoAdapter(app));
+  // app.useWebSocketAdapter(new SocketIoAdapter(app));
   
   app.useGlobalPipes(
     new ValidationPipe({
