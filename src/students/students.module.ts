@@ -13,6 +13,7 @@ import { StudentCourse } from '../student-courses/entities/student-course.entity
 import { CourseDiscipline } from '../courses/entities/course-discipline.entity';
 import { Discipline } from '../disciplines/entities/discipline.entity';
 import { Class } from '../classes/entities/class.entity';
+import { LessonPlan } from '../lesson-plans/entities/lesson-plan.entity';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { Class } from '../classes/entities/class.entity';
       CourseDiscipline,
       Discipline,
       Class,
+      LessonPlan,
     ]),
   ],
   controllers: [StudentsController],

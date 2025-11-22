@@ -64,5 +64,17 @@ export class StudentsController {
   getCompletedHours(@Param('studentId', ParseUUIDPipe) studentId: string) {
     return this.studentsService.getCompletedHours(studentId);
   }
+
+  @Get(':studentId/schedules')
+  @ApiOperation({ summary: 'Lista todos os horários (schedules) das turmas em que o aluno está matriculado.' })
+  getStudentSchedules(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.studentsService.getStudentSchedules(studentId);
+  }
+
+  @Get(':studentId/lesson-plans')
+  @ApiOperation({ summary: 'Lista todos os planos de aula (lesson_plans) das turmas em que o aluno está matriculado.' })
+  getStudentLessonPlans(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.studentsService.getStudentLessonPlans(studentId);
+  }
 }
 
