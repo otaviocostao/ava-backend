@@ -28,6 +28,9 @@ export class Activity {
   })
   type: ActivityType;
 
+  @Column({ name: 'start_date', type: 'timestamp with time zone', nullable: true })
+  startDate: Date | null;
+
   @Column({ type: 'date', nullable: true })
   dueDate: Date;
 

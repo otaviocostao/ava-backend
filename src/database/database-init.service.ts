@@ -10,6 +10,7 @@ export class DatabaseInitService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureDepartmentTeachersTable();
     await this.ensureVideoLessonsOrderColumn();
+    await this.ensureVirtualExamEnumValue();
   }
 
   private async ensureDepartmentTeachersTable() {
@@ -114,6 +115,44 @@ export class DatabaseInitService implements OnModuleInit {
       await queryRunner.release();
     } catch (error) {
       this.logger.error('❌ Erro ao garantir coluna order em video_lessons:', error);
+      // Não lançar erro para não impedir a inicialização do app
+    }
+  }
+
+  private async ensureVirtualExamEnumValue() {
+    try {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+
+      // Verificar se o valor 'virtual_exam' já existe no enum
+      const enumExists = await queryRunner.query(`
+        SELECT 1 
+        FROM pg_enum 
+        WHERE enumlabel = 'virtual_exam' 
+        AND enumtypid = (
+          SELECT oid 
+          FROM pg_type 
+          WHERE typname = 'activities_type_enum'
+        )
+      `);
+
+      if (enumExists.length > 0) {
+        this.logger.log('✅ Valor "virtual_exam" já existe no enum activities_type_enum');
+        await queryRunner.release();
+        return;
+      }
+
+      this.logger.log('🔧 Adicionando valor "virtual_exam" ao enum activities_type_enum...');
+
+      // Adicionar o valor ao enum
+      await queryRunner.query(`
+        ALTER TYPE activities_type_enum ADD VALUE 'virtual_exam';
+      `);
+
+      this.logger.log('✅ Valor "virtual_exam" adicionado ao enum activities_type_enum com sucesso!');
+      await queryRunner.release();
+    } catch (error) {
+      this.logger.error('❌ Erro ao garantir valor virtual_exam no enum:', error);
       // Não lançar erro para não impedir a inicialização do app
     }
   }

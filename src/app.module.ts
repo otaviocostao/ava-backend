@@ -36,6 +36,7 @@ import { DatabaseInitService } from './database/database-init.service';
 import { StudentCoursesModule } from './student-courses/student-courses.module';
 import { CommunicationsModule } from './communications/communications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { ExamsModule } from './exams/exams.module';
 
 @Module({
   imports: [
@@ -89,7 +90,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
         };
       },
     }),
-    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule, StudentCoursesModule, CommunicationsModule, AnalyticsModule
+    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule, StudentCoursesModule, CommunicationsModule, AnalyticsModule, ExamsModule
   ],
   controllers: [AppController],
   providers: [AppService, AppContextService, LiveClassGateway, DatabaseInitService],
