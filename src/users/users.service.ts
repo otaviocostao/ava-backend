@@ -35,9 +35,8 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = await this.userRepository.findOneBy({
-      email: createUserDto.email,
-    });
+    // Verificar se já existe usuário com este email (ativo ou inativo)
+    const existingUser = await this.findByEmail(createUserDto.email);
     if (existingUser) {
       throw new ConflictException('O e-mail informado já está em uso.');
     }
@@ -133,6 +132,12 @@ export class UsersService {
       .leftJoinAndSelect('user.roles', 'role')
       .where('user.email = :email', { email })
       .getOne();
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { email },
+    });
   }
 
   async assignRoleToUser(userId: string, roleId: string): Promise<User> {

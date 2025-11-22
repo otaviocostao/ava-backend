@@ -44,6 +44,13 @@ export class UsersController {
     return this.usersService.findAll(pageNumber, limitNumber, role, search);
   }
 
+  @Get('check-email/:email')
+  @ApiOperation({ summary: 'Verifica se um email já está cadastrado no sistema.' })
+  async checkEmail(@Param('email') email: string): Promise<{ exists: boolean }> {
+    const user = await this.usersService.findByEmail(email);
+    return { exists: !!user };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Busca detalhes de um usuário específico.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {

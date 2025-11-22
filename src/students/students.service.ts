@@ -10,6 +10,7 @@ import { ActivitySubmission } from '../activities/entities/activity-submission.e
 import { Schedule } from '../schedules/entities/schedule.entity';
 import { Class } from 'src/classes/entities/class.entity';
 import { StudentCourse } from 'src/student-courses/entities/student-course.entity';
+import { LessonPlan } from '../lesson-plans/entities/lesson-plan.entity';
 import { CourseDiscipline } from 'src/courses/entities/course-discipline.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
 import { CourseDisciplineType } from 'src/common/enums/course-discipline-type.enum';
@@ -86,6 +87,8 @@ export class StudentsService {
     private readonly disciplineRepository: Repository<Discipline>,
     @InjectRepository(Class)
     private readonly classRepository: Repository<Class>,
+    @InjectRepository(LessonPlan)
+    private readonly lessonPlanRepository: Repository<LessonPlan>,
   ) {}
 
   private async ensureStudentExists(studentId: string): Promise<User> {
@@ -482,6 +485,52 @@ export class StudentsService {
     }
 
     return completedHours;
+  }
+
+  async getStudentSchedules(studentId: string): Promise<Schedule[]> {
+    await this.ensureStudentExists(studentId);
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['class'],
+    });
+
+    const classIds = enrollments.map((e) => e.class.id);
+
+    if (classIds.length === 0) {
+      return [];
+    }
+
+    const schedules = await this.scheduleRepository.find({
+      where: { class: { id: In(classIds) } },
+      relations: ['class', 'class.discipline', 'class.teacher'],
+      order: { dayOfWeek: 'ASC', startTime: 'ASC' },
+    });
+
+    return schedules;
+  }
+
+  async getStudentLessonPlans(studentId: string): Promise<LessonPlan[]> {
+    await this.ensureStudentExists(studentId);
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['class'],
+    });
+
+    const classIds = enrollments.map((e) => e.class.id);
+
+    if (classIds.length === 0) {
+      return [];
+    }
+
+    const lessonPlans = await this.lessonPlanRepository.find({
+      where: { class: { id: In(classIds) } },
+      relations: ['class', 'class.discipline', 'class.teacher', 'schedule'],
+      order: { date: 'ASC' },
+    });
+
+    return lessonPlans;
   }
 
   async getStudentCurriculum(studentId: string): Promise<StudentCurriculumDto> {
