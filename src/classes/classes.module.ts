@@ -9,10 +9,11 @@ import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { Schedule } from 'src/schedules/entities/schedule.entity';
 import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { LessonPlan } from 'src/lesson-plans/entities/lesson-plan.entity';
+import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
 
 @Module({
   imports: [
-      TypeOrmModule.forFeature([Class, Discipline, User, Enrollment, Schedule, Attendance, LessonPlan]),
+      TypeOrmModule.forFeature([Class, Discipline, User, Enrollment, Schedule, Attendance, LessonPlan, AcademicPeriod]),
     ],
   controllers: [ClassesController],
   providers: [ClassesService],

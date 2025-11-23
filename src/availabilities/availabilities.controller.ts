@@ -26,7 +26,7 @@ export class AvailabilitiesController {
 
   @Get('teachers/:teacherId/availabilities')
   @ApiOperation({ summary: 'Lista todas as disponibilidades de um professor especifico.' })
-  @ApiQuery({ name: 'semester', required: false, description: 'Filtrar por semestre especifico' })
+  @ApiQuery({ name: 'academicPeriodId', required: false, description: 'Filtrar por período letivo específico (UUID)' })
   @ApiQuery({ name: 'dayOfWeek', required: false, enum: DayOfWeek, description: 'Filtrar por dia da semana especifico' })
   findByTeacherId(
     @Param('teacherId', ParseUUIDPipe) teacherId: string,

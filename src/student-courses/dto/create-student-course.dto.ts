@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Matches } from "class-validator";
+import { IsEnum, IsNotEmpty, IsOptional, IsUUID } from "class-validator";
 import { StudentCourseStatus } from "src/common/enums/student-course-status.enum";
 
 export class CreateStudentCourseDto {
@@ -10,10 +10,9 @@ export class CreateStudentCourseDto {
   @IsNotEmpty()
   courseId: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/^\d{4}-(1|2)$/, { message: 'entrySemester deve estar no formato YYYY-1|2' })
-  entrySemester: string;
+  @IsUUID('4', { message: 'O ID do período letivo de entrada deve ser um UUID válido.' })
+  @IsNotEmpty({ message: 'O período letivo de entrada é obrigatório.' })
+  entryAcademicPeriodId: string;
 
   @IsEnum(StudentCourseStatus)
   @IsOptional()

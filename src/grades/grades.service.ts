@@ -368,7 +368,7 @@ export class GradesService {
 
     const enrollments = await this.enrollmentRepository.find({
       where: { student: { id: studentId } },
-      relations: ['class', 'class.activities'],
+      relations: ['class', 'class.activities', 'class.academicPeriod'],
     });
 
     const enrollmentIds = enrollments.map((enrollment) => enrollment.id);
@@ -428,7 +428,7 @@ export class GradesService {
         class: {
           id: clazz.id,
           code: clazz.code,
-          semester: clazz.semester,
+          semester: clazz.academicPeriod.period,
           year: clazz.year,
         },
         activities: activityEntries,
@@ -451,6 +451,7 @@ export class GradesService {
       relations: [
         'discipline',
         'teacher',
+        'academicPeriod',
         'activities',
         'enrollments',
         'enrollments.student',
@@ -524,7 +525,7 @@ export class GradesService {
       class: {
         id: clazz.id,
         code: clazz.code,
-        semester: clazz.semester,
+        semester: clazz.academicPeriod.period,
         year: clazz.year,
         discipline: clazz.discipline
           ? {
@@ -685,7 +686,7 @@ export class GradesService {
         class: {
           id: clazz.id,
           code: clazz.code,
-          semester: clazz.semester,
+          semester: clazz.academicPeriod.period,
           year: clazz.year,
           disciplineName: clazz.discipline?.name || '',
         },

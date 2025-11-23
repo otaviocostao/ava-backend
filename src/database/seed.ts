@@ -12,6 +12,7 @@ import { Schedule } from '../schedules/entities/schedule.entity';
 import { Forum } from '../forums/entities/forum.entity';
 import { LessonPlan } from '../lesson-plans/entities/lesson-plan.entity';
 import { Availability } from '../availabilities/entities/availability.entity';
+import { AcademicPeriod } from '../academic-periods/entities/academic-period.entity';
 import { ActivityType } from '../common/enums/activity-type.enum';
 import { ActivityUnit } from '../common/enums/activity-unit.enum';
 import { DayOfWeek } from '../common/enums/day-of-week.enum';
@@ -29,10 +30,11 @@ async function seed() {
     // await clearDatabase(dataSource);
 
     // Criar dados base
+    const academicPeriods = await createAcademicPeriods(dataSource);
     const courses = await createCourses(dataSource);
     const disciplines = await createDisciplines(dataSource, courses);
     const users = await createUsers(dataSource);
-    const classes = await createClasses(dataSource, disciplines, users);
+    const classes = await createClasses(dataSource, disciplines, users, academicPeriods);
     
     // Criar dados relacionados às classes
     const activities = await createActivities(dataSource, classes);
@@ -42,10 +44,11 @@ async function seed() {
     const lessonPlans = await createLessonPlans(dataSource, classes);
     
     // Criar availabilities
-    const availabilities = await createAvailabilities(dataSource, users);
+    const availabilities = await createAvailabilities(dataSource, users, academicPeriods);
 
     console.log('✅ Seed concluído com sucesso!');
     console.log(`📊 Dados criados:`);
+    console.log(`   - ${academicPeriods.length} períodos letivos`);
     console.log(`   - ${courses.length} cursos`);
     console.log(`   - ${disciplines.length} disciplinas`);
     console.log(`   - ${users.length} usuários`);
@@ -86,6 +89,38 @@ async function clearDatabase(dataSource: DataSource) {
   }
 }
 
+
+async function createAcademicPeriods(dataSource: DataSource): Promise<AcademicPeriod[]> {
+  console.log('📅 Criando períodos letivos...');
+  
+  const academicPeriodRepository = dataSource.getRepository(AcademicPeriod);
+  
+  const periods = [
+    { period: '2024.1' },
+    { period: '2024.2' },
+    { period: '2025.1' },
+    { period: '2025.2' },
+  ];
+
+  const createdPeriods: AcademicPeriod[] = [];
+  for (const periodData of periods) {
+    let existingPeriod = await academicPeriodRepository.findOne({
+      where: { period: periodData.period },
+    });
+
+    if (!existingPeriod) {
+      existingPeriod = academicPeriodRepository.create(periodData);
+      existingPeriod = await academicPeriodRepository.save(existingPeriod);
+      console.log(`   ✅ Período criado: ${periodData.period}`);
+    } else {
+      console.log(`   ⏭️  Período já existe: ${periodData.period}`);
+    }
+
+    createdPeriods.push(existingPeriod);
+  }
+
+  return createdPeriods;
+}
 
 async function createCourses(dataSource: DataSource): Promise<Course[]> {
   console.log('🎓 Criando cursos...');
@@ -259,43 +294,46 @@ async function createUsers(dataSource: DataSource): Promise<User[]> {
   return createdUsers;
 }
 
-async function createClasses(dataSource: DataSource, disciplines: Discipline[], users: User[]): Promise<Class[]> {
+async function createClasses(dataSource: DataSource, disciplines: Discipline[], users: User[], academicPeriods: AcademicPeriod[]): Promise<Class[]> {
   console.log('🏫 Criando turmas...');
   
   const classRepository = dataSource.getRepository(Class);
   
+  const period20241 = academicPeriods.find(p => p.period === '2024.1')!;
+  const period20242 = academicPeriods.find(p => p.period === '2024.2')!;
+  
   const classes = [
     {
       code: 'CC2024-1-PROG1-A',
-      semester: '2024.1',
+      academicPeriod: period20241,
       year: 2024,
       discipline: disciplines[0], // Programação I
       teacher: users[0], // Prof. João Silva
     },
     {
       code: 'CC2024-1-ED-A',
-      semester: '2024.1',
+      academicPeriod: period20241,
       year: 2024,
       discipline: disciplines[1], // Estruturas de Dados
       teacher: users[1], // Prof. Maria Santos
     },
     {
       code: 'ES2024-1-WEB-A',
-      semester: '2024.1',
+      academicPeriod: period20241,
       year: 2024,
       discipline: disciplines[4], // Desenvolvimento Web
       teacher: users[2], // Prof. Pedro Costa
     },
     {
       code: 'CC2024-2-PROG1-B',
-      semester: '2024.2',
+      academicPeriod: period20242,
       year: 2024,
       discipline: disciplines[0], // Programação I
       teacher: users[0], // Prof. João Silva
     },
     {
       code: 'SI2024-1-GEST-A',
-      semester: '2024.1',
+      academicPeriod: period20241,
       year: 2024,
       discipline: disciplines[7], // Gestão de Projetos
       teacher: users[1], // Prof. Maria Santos
@@ -606,44 +644,47 @@ async function createLessonPlans(dataSource: DataSource, classes: Class[]): Prom
   return createdLessonPlans;
 }
 
-async function createAvailabilities(dataSource: DataSource, users: User[]): Promise<Availability[]> {
+async function createAvailabilities(dataSource: DataSource, users: User[], academicPeriods: AcademicPeriod[]): Promise<Availability[]> {
   console.log('📅 Criando disponibilidades...');
   
   const availabilityRepository = dataSource.getRepository(Availability);
+  
+  const period20241 = academicPeriods.find(p => p.period === '2024.1')!;
+  const period20242 = academicPeriods.find(p => p.period === '2024.2')!;
   
   const availabilities = [
     // Prof. João Silva
     {
       teacher: users[0],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.MONDAY,
       startTime: '08:00',
       endTime: '12:00',
     },
     {
       teacher: users[0],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.WEDNESDAY,
       startTime: '08:00',
       endTime: '12:00',
     },
     {
       teacher: users[0],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.FRIDAY,
       startTime: '08:00',
       endTime: '10:00',
     },
     {
       teacher: users[0],
-      semester: '2024.2',
+      academicPeriod: period20242,
       dayOfWeek: DayOfWeek.TUESDAY,
       startTime: '08:00',
       endTime: '12:00',
     },
     {
       teacher: users[0],
-      semester: '2024.2',
+      academicPeriod: period20242,
       dayOfWeek: DayOfWeek.THURSDAY,
       startTime: '08:00',
       endTime: '12:00',
@@ -652,21 +693,21 @@ async function createAvailabilities(dataSource: DataSource, users: User[]): Prom
     // Prof. Maria Santos
     {
       teacher: users[1],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.TUESDAY,
       startTime: '10:00',
       endTime: '16:00',
     },
     {
       teacher: users[1],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.THURSDAY,
       startTime: '10:00',
       endTime: '16:00',
     },
     {
       teacher: users[1],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.FRIDAY,
       startTime: '14:00',
       endTime: '18:00',
@@ -675,21 +716,21 @@ async function createAvailabilities(dataSource: DataSource, users: User[]): Prom
     // Prof. Pedro Costa
     {
       teacher: users[2],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.MONDAY,
       startTime: '14:00',
       endTime: '18:00',
     },
     {
       teacher: users[2],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.WEDNESDAY,
       startTime: '14:00',
       endTime: '18:00',
     },
     {
       teacher: users[2],
-      semester: '2024.1',
+      academicPeriod: period20241,
       dayOfWeek: DayOfWeek.FRIDAY,
       startTime: '14:00',
       endTime: '18:00',

@@ -5,6 +5,7 @@ import { StudentCourse } from './entities/student-course.entity';
 import { CreateStudentCourseDto } from './dto/create-student-course.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Course } from 'src/courses/entities/course.entity';
+import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
 import { StudentCourseStatus } from 'src/common/enums/student-course-status.enum';
 
 @Injectable()
@@ -16,24 +17,20 @@ export class StudentCoursesService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Course)
     private readonly courseRepository: Repository<Course>,
+    @InjectRepository(AcademicPeriod)
+    private readonly academicPeriodRepository: Repository<AcademicPeriod>,
   ) {}
 
-  private validateEntrySemesterFormat(entrySemester: string) {
-    if (!/^\d{4}-(1|2)$/.test(entrySemester)) {
-      throw new BadRequestException('entrySemester deve estar no formato YYYY-1|2');
-    }
-  }
-
   async create(dto: CreateStudentCourseDto): Promise<StudentCourse> {
-    this.validateEntrySemesterFormat(dto.entrySemester);
-
-    const [student, course] = await Promise.all([
+    const [student, course, entryAcademicPeriod] = await Promise.all([
       this.userRepository.findOne({ where: { id: dto.studentId } }),
       this.courseRepository.findOne({ where: { id: dto.courseId } }),
+      this.academicPeriodRepository.findOne({ where: { id: dto.entryAcademicPeriodId } }),
     ]);
 
     if (!student) throw new NotFoundException(`Aluno com ID '${dto.studentId}' não encontrado.`);
     if (!course) throw new NotFoundException(`Curso com ID '${dto.courseId}' não encontrado.`);
+    if (!entryAcademicPeriod) throw new NotFoundException(`Período letivo com ID '${dto.entryAcademicPeriodId}' não encontrado.`);
 
     const hasStudentRole = (student.roles || []).some(r => r.name === 'student');
     if (!hasStudentRole) {
@@ -50,7 +47,7 @@ export class StudentCoursesService {
     const link = this.studentCourseRepository.create({
       student,
       course,
-      entrySemester: dto.entrySemester,
+      entryAcademicPeriod,
       status: dto.status ?? StudentCourseStatus.ACTIVE,
     });
     const saved = await this.studentCourseRepository.save(link);
@@ -70,7 +67,7 @@ export class StudentCoursesService {
   async findStudentsByCourse(courseId: string): Promise<User[]> {
     const links = await this.studentCourseRepository.find({
       where: { course: { id: courseId } },
-      relations: ['student'],
+      relations: ['student', 'entryAcademicPeriod'],
     });
     return links.map(l => l.student);
   }
@@ -78,7 +75,7 @@ export class StudentCoursesService {
   async findCoursesByStudent(studentId: string): Promise<Course[]> {
     const links = await this.studentCourseRepository.find({
       where: { student: { id: studentId } },
-      relations: ['course'],
+      relations: ['course', 'entryAcademicPeriod'],
     });
     return links.map(l => l.course);
   }

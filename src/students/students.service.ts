@@ -389,7 +389,7 @@ export class StudentsService {
 
     const enrollments = await this.enrollmentRepository.find({
       where: { student: { id: studentId } },
-      relations: ['class', 'class.discipline', 'class.teacher'],
+      relations: ['class', 'class.discipline', 'class.teacher', 'class.academicPeriod'],
     });
 
     return enrollments.map((enrollment) => ({
@@ -397,7 +397,7 @@ export class StudentsService {
       class: {
         id: enrollment.class.id,
         code: enrollment.class.code,
-        semester: enrollment.class.semester,
+        semester: enrollment.class.academicPeriod.period,
         year: enrollment.class.year,
       },
       discipline: enrollment.class.discipline
@@ -423,11 +423,14 @@ export class StudentsService {
         'class',
         'class.discipline',
         'class.teacher',
+        'class.academicPeriod',
       ],
       order: {
         class: {
           year: 'DESC',
-          semester: 'DESC',
+          academicPeriod: {
+            period: 'DESC',
+          },
         }
       }
     });
@@ -441,7 +444,7 @@ export class StudentsService {
       return {
         id: studentClass.id,
         code: studentClass.code,
-        semester: studentClass.semester,
+        semester: studentClass.academicPeriod.period,
         year: studentClass.year,
         discipline: {
           id: studentClass.discipline.id,
@@ -642,7 +645,7 @@ export class StudentsService {
         (a, b) => (new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()),
       )[0];
 
-      const classSemester = latestEnrollment.class.semester;
+      const classPeriod = latestEnrollment.class.academicPeriod.period;
       const enrollmentGrades = gradesByEnrollmentId.get(latestEnrollment.id) || [];
       const enrollmentAttendances = attendancesByEnrollmentId.get(latestEnrollment.id) || [];
 
@@ -662,11 +665,11 @@ export class StudentsService {
         totalAttendances > 0 ? (presentCount / totalAttendances) * 100 : 100;
 
       // Determina se está cursando (semestre atual)
-      const isCurrentSemester = classSemester === currentSemester || 
-                                 classSemester === currentSemester.replace('.', '-');
+      const isCurrentSemester = classPeriod === currentSemester || 
+                                 classPeriod === currentSemester.replace('.', '-');
 
       if (isCurrentSemester) {
-        return { status: 'Cursando', finalGrade, absences, academicPeriod: classSemester };
+        return { status: 'Cursando', finalGrade, absences, academicPeriod: classPeriod };
       }
 
       // Disciplina finalizada - verifica aprovação
@@ -675,9 +678,9 @@ export class StudentsService {
         finalGrade >= MIN_APPROVAL_SCORE &&
         attendancePercentage >= MIN_ATTENDANCE_PERCENTAGE
       ) {
-        return { status: 'Aprovado', finalGrade, absences, academicPeriod: classSemester };
+        return { status: 'Aprovado', finalGrade, absences, academicPeriod: classPeriod };
       } else {
-        return { status: 'Reprovado', finalGrade, absences, academicPeriod: classSemester };
+        return { status: 'Reprovado', finalGrade, absences, academicPeriod: classPeriod };
       }
     };
 

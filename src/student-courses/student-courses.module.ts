@@ -5,9 +5,10 @@ import { StudentCoursesService } from './student-courses.service';
 import { StudentCoursesController } from './student-courses.controller';
 import { User } from 'src/users/entities/user.entity';
 import { Course } from 'src/courses/entities/course.entity';
+import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([StudentCourse, User, Course])],
+  imports: [TypeOrmModule.forFeature([StudentCourse, User, Course, AcademicPeriod])],
   controllers: [StudentCoursesController],
   providers: [StudentCoursesService],
   exports: [StudentCoursesService],

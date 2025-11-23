@@ -7,6 +7,7 @@ import { Material } from "src/materials/entities/material.entity";
 import { Message } from "src/messages/entities/message.entity";
 import { Schedule } from "src/schedules/entities/schedule.entity";
 import { User } from "src/users/entities/user.entity";
+import { AcademicPeriod } from "src/academic-periods/entities/academic-period.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('classes')
@@ -18,9 +19,14 @@ export class Class {
   @Column({ length: 50, unique: true, nullable: false })
   code: string;
 
-  // Semestre da turma, em ANO-SEMESTRE (Ex: 2025-2)
-  @Column({ length: 50, nullable: false })
-  semester: string;
+  // Período letivo da turma
+  @ManyToOne(() => AcademicPeriod, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'academic_period_id' })
+  academicPeriod: AcademicPeriod;
+
+  // Coluna temporária para migração - será removida após migração
+  @Column({ length: 50, nullable: true })
+  semester?: string;
 
   // Ano letivo da turma
   @Column({ type: 'int', nullable: false })

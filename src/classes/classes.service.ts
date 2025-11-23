@@ -10,6 +10,7 @@ import { Enrollment } from 'src/enrollments/entities/enrollment.entity';
 import { Schedule } from 'src/schedules/entities/schedule.entity';
 import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { LessonPlan } from 'src/lesson-plans/entities/lesson-plan.entity';
+import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
 
 @Injectable()
 export class ClassesService {
@@ -29,15 +30,25 @@ export class ClassesService {
     private readonly attendanceRepository: Repository<Attendance>,
     @InjectRepository(LessonPlan)
     private readonly lessonPlanRepository: Repository<LessonPlan>,
+    @InjectRepository(AcademicPeriod)
+    private readonly academicPeriodRepository: Repository<AcademicPeriod>,
   ) {}
 
   // Criar nova Classe
   async create(createClassDto: CreateClassDto): Promise<Class> {
-    const { disciplineId, teacherId, ...classData } = createClassDto;
+    const { disciplineId, teacherId, academicPeriodId, ...classData } = createClassDto;
 
-    const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
+    const [discipline, academicPeriod] = await Promise.all([
+      this.disciplineRepository.findOneBy({ id: disciplineId }),
+      this.academicPeriodRepository.findOneBy({ id: academicPeriodId }),
+    ]);
+
     if (!discipline) {
       throw new NotFoundException(`Disciplina com ID "${disciplineId}" não encontrada.`);
+    }
+
+    if (!academicPeriod) {
+      throw new NotFoundException(`Período letivo com ID "${academicPeriodId}" não encontrado.`);
     }
 
     let teacher: User | null = null;
@@ -51,6 +62,7 @@ export class ClassesService {
     const newClass = this.classRepository.create({
       ...classData,
       discipline,
+      academicPeriod,
       ...(teacher && { teacher }),
     });
 
@@ -70,7 +82,7 @@ export class ClassesService {
     }
 
     return this.classRepository.find({
-      relations: ['discipline', 'teacher'],
+      relations: ['discipline', 'teacher', 'academicPeriod'],
     });
   }
 
@@ -78,7 +90,7 @@ export class ClassesService {
   async findOne(id: string): Promise<Class> {
     const classEntity = await this.classRepository.findOne({
       where: { id },
-      relations: ['teacher', 'discipline'],
+      relations: ['teacher', 'discipline', 'academicPeriod'],
     });
 
     if (!classEntity){
@@ -89,7 +101,7 @@ export class ClassesService {
 
 //Atualizar Classe
   async update(id: string, updateClassDto: UpdateClassDto): Promise<Class> {
-    const { disciplineId, teacherId, ...classData } = updateClassDto;
+    const { disciplineId, teacherId, academicPeriodId, ...classData } = updateClassDto;
 
     const classEntity = await this.classRepository.preload({
       id,
@@ -108,6 +120,14 @@ export class ClassesService {
       classEntity.discipline = discipline;
     }
 
+    if (academicPeriodId) {
+      const academicPeriod = await this.academicPeriodRepository.findOneBy({ id: academicPeriodId });
+      if (!academicPeriod) {
+        throw new NotFoundException(`Período letivo com ID "${academicPeriodId}" não encontrado.`);
+      }
+      classEntity.academicPeriod = academicPeriod;
+    }
+
     if (teacherId) {
       const teacher = await this.userRepository.findOneBy({ id: teacherId });
       if (!teacher) {
@@ -122,7 +142,7 @@ export class ClassesService {
   async assignTeacher(classId: string, teacherId: string): Promise<Class> {
     const classEntity = await this.classRepository.findOne({
       where: { id: classId },
-      relations: ['teacher', 'discipline'],
+      relations: ['teacher', 'discipline', 'academicPeriod'],
     });
 
     if (!classEntity) {
@@ -139,14 +159,14 @@ export class ClassesService {
 
     return this.classRepository.findOne({
       where: { id: classEntity.id },
-      relations: ['teacher', 'discipline'],
+      relations: ['teacher', 'discipline', 'academicPeriod'],
     }) as Promise<Class>;
   }
 
   async findByTeacher(teacherId: string): Promise<Class[]> {
     return this.classRepository.find({
       where: { teacher: { id: teacherId } },
-      relations: ['teacher', 'discipline'],
+      relations: ['teacher', 'discipline', 'academicPeriod'],
     });
   }
 
@@ -154,7 +174,7 @@ export class ClassesService {
   async findByTeacherWithDetails(teacherId: string): Promise<any[]> {
     const classes = await this.classRepository.find({
       where: { teacher: { id: teacherId } },
-      relations: ['teacher', 'discipline'],
+      relations: ['teacher', 'discipline', 'academicPeriod'],
     });
 
     const classesWithDetails = await Promise.all(

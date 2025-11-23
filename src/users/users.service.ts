@@ -342,12 +342,13 @@ export class UsersService {
     const enrollments = await this.enrollmentRepository.find({
       where: { 
         student: { id: studentId },
-        class: { semester: semestre }
+        class: { academicPeriod: { period: semestre } }
       },
       relations: [
         'class',
         'class.discipline',
         'class.teacher',
+        'class.academicPeriod',
         'attendances',
       ],
     });
@@ -361,7 +362,7 @@ export class UsersService {
       const detailedAbsences: DetailedAbsence[] = absences.map(absence => {
         const date = new Date(absence.date);
         
-        const unit = this.mapDateToUnit(date, enrollment.class.semester);
+        const unit = this.mapDateToUnit(date, enrollment.class.academicPeriod.period);
         
         if (unit === '1ª Unidade' ) {
           absencesByUnit.unit1 += absence.classHour;
@@ -390,9 +391,9 @@ export class UsersService {
 
     const todosEnrollments = await this.enrollmentRepository.find({
         where: { student: { id: studentId } },
-        relations: ['class'],
+        relations: ['class', 'class.academicPeriod'],
     });
-    const availableSemesters = [...new Set(todosEnrollments.map(e => e.class.semester))].sort((a, b) => b.localeCompare(a));
+    const availableSemesters = [...new Set(todosEnrollments.map(e => e.class.academicPeriod.period))].sort((a, b) => b.localeCompare(a));
 
     return {
       disciplines,
@@ -490,9 +491,9 @@ export class UsersService {
       return 'Insuficiente';
   }
   
-  private mapDateToUnit(date: Date, semester: string): '1ª Unidade' | '2ª Unidade'  | 'Outra' {
+  private mapDateToUnit(date: Date, period: string): '1ª Unidade' | '2ª Unidade'  | 'Outra' {
       const month = date.getMonth() + 1;
-      const [, semesterNumber] = semester.split('-').map(Number);
+      const [, semesterNumber] = period.split('.').map(Number);
   
       if (semesterNumber === 1) { 
         return month <= 3 ? '1ª Unidade' : '2ª Unidade' ;
@@ -506,7 +507,7 @@ export class UsersService {
 
   private isSemesterFinished(classInstance: Class): boolean {
     const currentDate = new Date();
-    const [year, semesterNumber] = classInstance.semester.split('-').map(Number);
+    const [year, semesterNumber] = classInstance.academicPeriod.period.split('.').map(Number);
 
     let semesterEndDate: Date;
 

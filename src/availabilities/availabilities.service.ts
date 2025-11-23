@@ -6,6 +6,7 @@ import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { FindTeacherAvailabilitiesDto } from './dto/find-teacher-availabilities.dto';
 import { Availability } from './entities/availability.entity';
 import { User } from 'src/users/entities/user.entity';
+import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
 
 @Injectable()
 export class AvailabilitiesService {
@@ -14,6 +15,8 @@ export class AvailabilitiesService {
     private readonly availabilityRepository: Repository<Availability>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(AcademicPeriod)
+    private readonly academicPeriodRepository: Repository<AcademicPeriod>,
   ) {}
 
   private async ensureTeacherExists(teacherId: string): Promise<User> {
@@ -26,10 +29,22 @@ export class AvailabilitiesService {
     return teacher;
   }
 
+  private async ensureAcademicPeriodExists(academicPeriodId: string): Promise<AcademicPeriod> {
+    const academicPeriod = await this.academicPeriodRepository.findOne({
+      where: { id: academicPeriodId },
+    });
+
+    if (!academicPeriod) {
+      throw new NotFoundException(`Período letivo com ID "${academicPeriodId}" não encontrado.`);
+    }
+
+    return academicPeriod;
+  }
+
   private async getAvailabilityOrFail(id: string): Promise<Availability> {
     const availability = await this.availabilityRepository.findOne({
       where: { id },
-      relations: ['teacher'],
+      relations: ['teacher', 'academicPeriod'],
     });
 
     if (!availability) {
@@ -59,18 +74,21 @@ export class AvailabilitiesService {
   }
 
   async create(createAvailabilityDto: CreateAvailabilityDto): Promise<Availability> {
-    const { teacherId, semester, dayOfWeek, startTime, endTime } = createAvailabilityDto;
+    const { teacherId, academicPeriodId, dayOfWeek, startTime, endTime } = createAvailabilityDto;
 
-    const teacher = await this.ensureTeacherExists(teacherId);
+    const [teacher, academicPeriod] = await Promise.all([
+      this.ensureTeacherExists(teacherId),
+      this.ensureAcademicPeriodExists(academicPeriodId),
+    ]);
 
     this.validateTimeRange(startTime, endTime);
 
     const availability = this.availabilityRepository.create({
-      semester,
       dayOfWeek,
       startTime,
       endTime,
       teacher,
+      academicPeriod,
     });
 
     return this.availabilityRepository.save(availability);
@@ -78,7 +96,7 @@ export class AvailabilitiesService {
 
   async findAll(): Promise<Availability[]> {
     return this.availabilityRepository.find({
-      relations: ['teacher'],
+      relations: ['teacher', 'academicPeriod'],
       order: { dayOfWeek: 'ASC', startTime: 'ASC' },
     });
   }
@@ -96,8 +114,10 @@ export class AvailabilitiesService {
       }
     }
 
-    if (updateAvailabilityDto.semester !== undefined) {
-      availability.semester = updateAvailabilityDto.semester;
+    if (updateAvailabilityDto.academicPeriodId) {
+      if (updateAvailabilityDto.academicPeriodId !== availability.academicPeriod.id) {
+        availability.academicPeriod = await this.ensureAcademicPeriodExists(updateAvailabilityDto.academicPeriodId);
+      }
     }
 
     if (updateAvailabilityDto.dayOfWeek !== undefined) {
@@ -126,17 +146,17 @@ export class AvailabilitiesService {
   async findByTeacherId(teacherId: string, filters?: FindTeacherAvailabilitiesDto): Promise<Availability[]> {
     await this.ensureTeacherExists(teacherId);
 
-    const { semester, dayOfWeek } = filters ?? {};
+    const { academicPeriodId, dayOfWeek } = filters ?? {};
 
     const where = {
       teacher: { id: teacherId },
-      ...(semester ? { semester } : {}),
+      ...(academicPeriodId ? { academicPeriod: { id: academicPeriodId } } : {}),
       ...(dayOfWeek ? { dayOfWeek } : {}),
     };
 
     return this.availabilityRepository.find({
       where,
-      relations: ['teacher'],
+      relations: ['teacher', 'academicPeriod'],
       order: { dayOfWeek: 'ASC', startTime: 'ASC' },
     });
   }
