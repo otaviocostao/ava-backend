@@ -326,7 +326,7 @@ export class ActivitiesService {
         class: { id: In(classIds) },
         type: Not(ActivityType.EXAM)
       },
-      relations: ['class.discipline'], 
+      relations: ['class.discipline', 'class.academicPeriod'], 
       order: { dueDate: 'ASC' },
     });
 
@@ -389,6 +389,8 @@ export class ActivitiesService {
         status,
         nota,
         dataConclusao,
+        semestre: activity.class.academicPeriod?.period || undefined,
+        classId: activity.class.id,
       };
     });
 

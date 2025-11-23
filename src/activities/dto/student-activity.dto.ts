@@ -7,4 +7,6 @@ export interface StudentActivityDto {
   status: 'pendente' | 'concluido' | 'avaliado';
   nota: number | null;
   dataConclusao: string | null;
+  semestre?: string;
+  classId?: string;
 }

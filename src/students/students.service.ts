@@ -506,7 +506,7 @@ export class StudentsService {
 
     const schedules = await this.scheduleRepository.find({
       where: { class: { id: In(classIds) } },
-      relations: ['class', 'class.discipline', 'class.teacher'],
+      relations: ['class', 'class.discipline', 'class.teacher', 'class.academicPeriod'],
       order: { dayOfWeek: 'ASC', startTime: 'ASC' },
     });
 
@@ -529,7 +529,7 @@ export class StudentsService {
 
     const lessonPlans = await this.lessonPlanRepository.find({
       where: { class: { id: In(classIds) } },
-      relations: ['class', 'class.discipline', 'class.teacher', 'schedule'],
+      relations: ['class', 'class.discipline', 'class.teacher', 'class.academicPeriod', 'schedule'],
       order: { date: 'ASC' },
     });
 

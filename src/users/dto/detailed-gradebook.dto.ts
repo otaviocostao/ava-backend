@@ -16,5 +16,6 @@ export interface DetailedGradebookDto {
         nota: number | null;
     }[];
     cor: string;
+    semestre?: string;
   }[];
 }

@@ -189,6 +189,7 @@ export class UsersService {
       relations: [
         'class',
         'class.discipline',
+        'class.academicPeriod',
         'grades',
         'grades.activity',
       ],
@@ -249,7 +250,8 @@ export class UsersService {
           frequencia: 100, 
           situacao: 'Em Andamento' as const,
           notas: [], 
-          cor: 'gray', 
+          cor: 'gray',
+          semestre: enrollment.class.academicPeriod?.period || undefined,
         };
       }
 
@@ -304,6 +306,7 @@ export class UsersService {
         situacao,
         notas,
         cor: cor,
+        semestre: enrollment.class.academicPeriod?.period || undefined,
       };
     });
 
