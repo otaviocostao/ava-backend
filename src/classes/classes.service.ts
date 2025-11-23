@@ -296,6 +296,7 @@ export class ClassesService {
           sala: schedules[0]?.room || 'Não definida',
           atividades,
           avaliacoes,
+          semestre: classEntity.academicPeriod?.period || classEntity.semester || undefined,
           listaAlunos: enrollments.map((enrollment) => ({
             id: enrollment.student.id,
             nome: enrollment.student.name,
