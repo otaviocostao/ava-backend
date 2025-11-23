@@ -7,6 +7,12 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
+interface UserInfo {
+  userId: string;
+  userName?: string;
+  role: string;
+}
+
 @WebSocketGateway({
   cors: {
     origin: [
@@ -22,18 +28,23 @@ export class LiveClassGateway {
   server: Server;
 
   private socketToRoom = new Map<string, string>();
+  private socketToUserRole = new Map<string, string>();
+  private socketToUserInfo = new Map<string, UserInfo>();
 
   @SubscribeMessage('join-room')
   handleJoinRoom(
-    @MessageBody() data: { classId: string; userId: string },
+    @MessageBody() data: { classId: string; userId: string; role?: string; userName?: string },
     @ConnectedSocket() client: Socket,
   ): void {
-    const { classId, userId } = data;
+    const { classId, userId, role = 'student', userName } = data;
     
     client.join(classId);
     this.socketToRoom.set(client.id, classId);
+    this.socketToUserRole.set(client.id, role);
+    this.socketToUserInfo.set(client.id, { userId, userName, role });
 
-    client.to(classId).emit('user-connected', { userId, socketId: client.id });
+    // Notificar outros participantes sobre o novo participante
+    client.to(classId).emit('user-connected', { userId, socketId: client.id, role, userName });
 
     client.on('disconnect', () => {
       const roomId = this.socketToRoom.get(client.id);
@@ -41,6 +52,8 @@ export class LiveClassGateway {
         client.to(roomId).emit('user-disconnected', { userId, socketId: client.id });
       }
       this.socketToRoom.delete(client.id);
+      this.socketToUserRole.delete(client.id);
+      this.socketToUserInfo.delete(client.id);
     });
   }
 
@@ -67,4 +80,5 @@ export class LiveClassGateway {
   ): void {
     client.to(payload.toSocketId).emit('ice-candidate', { fromSocketId: client.id, candidate: payload.candidate });
   }
+
 }
