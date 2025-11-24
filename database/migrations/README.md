@@ -42,3 +42,4 @@ Adiciona o valor `virtual_exam` ao enum `activities_type_enum` no PostgreSQL.
 **Nota:** Este script é idempotente - pode ser executado múltiplas vezes sem causar erros.
 
 
+

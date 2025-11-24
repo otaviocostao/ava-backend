@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
     "init": "ts-node -r tsconfig-paths/register src/database/init.ts",
-    "migrate:academic-periods": "ts-node -r tsconfig-paths/register src/database/migrate-academic-periods.ts"
+    "migrate:academic-periods": "ts-node -r tsconfig-paths/register src/database/migrate-academic-periods.ts",
+    "migrate:academic-periods-dates": "ts-node -r tsconfig-paths/register src/database/migrate-academic-periods-dates.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
