@@ -166,10 +166,7 @@ export class ClassesService {
       }
     }
 
-    return this.classRepository.findOne({
-      where: { id: savedClass.id },
-      relations: ['discipline', 'teacher', 'academicPeriod', 'schedules'],
-    }) as Promise<Class>;
+    return savedClass;
   }
 
   // Buscar todas as Classes (opcionalmente filtrando por curso via disciplinas)
@@ -204,131 +201,42 @@ export class ClassesService {
 
 //Atualizar Classe
   async update(id: string, updateClassDto: UpdateClassDto): Promise<Class> {
-    const {
-      disciplineId,
-      teacherId,
-      academicPeriodId,
-      dayOfWeek,
-      startTime,
-      endTime,
-      room,
-      ...classData
-    } = updateClassDto;
+    const { disciplineId, teacherId, academicPeriodId, ...classData } = updateClassDto;
 
     const classEntity = await this.classRepository.preload({
       id,
       ...classData,
     });
 
-    if (!classEntity) {
-      throw new NotFoundException(`Classe com o ID '${id}' nao encontrada.`);
+    if (!classEntity){
+      throw new NotFoundException(`Classe com o ID '${id}' não encontrada.`)
     }
-
-    let academicPeriod: AcademicPeriod | null = classEntity.academicPeriod ?? null;
 
     if (disciplineId) {
       const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
       if (!discipline) {
-        throw new NotFoundException(`Disciplina com ID "${disciplineId}" nao encontrada.`);
+        throw new NotFoundException(`Disciplina com ID "${disciplineId}" não encontrada.`);
       }
       classEntity.discipline = discipline;
     }
 
     if (academicPeriodId) {
-      const foundAcademicPeriod = await this.academicPeriodRepository.findOneBy({ id: academicPeriodId });
-      if (!foundAcademicPeriod) {
-        throw new NotFoundException(`Periodo letivo com ID "${academicPeriodId}" nao encontrado.`);
+      const academicPeriod = await this.academicPeriodRepository.findOneBy({ id: academicPeriodId });
+      if (!academicPeriod) {
+        throw new NotFoundException(`Período letivo com ID "${academicPeriodId}" não encontrado.`);
       }
-      academicPeriod = foundAcademicPeriod;
-      classEntity.academicPeriod = foundAcademicPeriod;
+      classEntity.academicPeriod = academicPeriod;
     }
 
     if (teacherId) {
       const teacher = await this.userRepository.findOneBy({ id: teacherId });
       if (!teacher) {
-        throw new NotFoundException(`Usuario com ID "${teacherId}" nao encontrado.`);
+        throw new NotFoundException(`Usuário com ID "${teacherId}" não encontrado.`);
       }
       classEntity.teacher = teacher;
     }
 
-    const savedClass = await this.classRepository.save(classEntity);
-
-    const shouldHandleSchedule = [dayOfWeek, startTime, endTime, room].some(
-      (value) => value !== undefined && value !== '',
-    );
-
-    if (shouldHandleSchedule) {
-      const existingSchedules = await this.scheduleRepository.find({
-        where: { class: { id } },
-        order: { dayOfWeek: 'ASC', startTime: 'ASC' },
-      });
-
-      if (existingSchedules.length > 0) {
-        await this.schedulesService.update(existingSchedules[0].id, {
-          ...(dayOfWeek && { dayOfWeek }),
-          ...(startTime && { startTime }),
-          ...(endTime && { endTime }),
-          ...(room !== undefined ? { room } : {}),
-        });
-      } else {
-        if (!dayOfWeek || !startTime || !endTime) {
-          throw new BadRequestException(
-            'Para criar o horario da turma, informe dayOfWeek, startTime e endTime.',
-          );
-        }
-
-        if (!academicPeriod || !academicPeriod.startDate || !academicPeriod.endDate) {
-          const classWithPeriod = await this.classRepository.findOne({
-            where: { id },
-            relations: ['academicPeriod'],
-          });
-          academicPeriod = classWithPeriod?.academicPeriod ?? null;
-        }
-
-        if (!academicPeriod) {
-          throw new NotFoundException(`Periodo letivo com ID "${academicPeriodId}" nao encontrado.`);
-        }
-
-        if (!academicPeriod.startDate || !academicPeriod.endDate) {
-          throw new BadRequestException(
-            `O periodo letivo "${academicPeriod.period}" nao possui datas de inicio e/ou fim definidas.`,
-          );
-        }
-
-        const schedule = await this.schedulesService.create({
-          classId: savedClass.id,
-          dayOfWeek,
-          startTime,
-          endTime,
-          room: room || undefined,
-        });
-
-        const lessonDates = this.generateDatesForDayOfWeek(
-          academicPeriod.startDate,
-          academicPeriod.endDate,
-          dayOfWeek,
-        );
-
-        for (const date of lessonDates) {
-          const formattedDate = date.toISOString().split('T')[0];
-          const formattedDateDisplay = this.formatDate(date);
-          const content = `Plano de aula para ${formattedDateDisplay} - A definir`;
-
-          await this.lessonPlansService.create({
-            classId: savedClass.id,
-            scheduleId: schedule.id,
-            date: formattedDate,
-            status: 'agendada',
-            content,
-          });
-        }
-      }
-    }
-
-    return this.classRepository.findOne({
-      where: { id: savedClass.id },
-      relations: ['teacher', 'discipline', 'academicPeriod', 'schedules'],
-    }) as Promise<Class>;
+    return await this.classRepository.save(classEntity);
   }
 
   async assignTeacher(classId: string, teacherId: string): Promise<Class> {
