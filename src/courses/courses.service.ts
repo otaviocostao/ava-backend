@@ -184,7 +184,7 @@ export class CoursesService {
 
     return this.classRepository.find({
       where: { discipline: { id: In(disciplineIds) } },
-      relations: ['discipline', 'teacher', 'academicPeriod'],
+      relations: ['discipline', 'teacher', 'academicPeriod', 'schedules'],
       order: { code: 'ASC' },
     });
   }
