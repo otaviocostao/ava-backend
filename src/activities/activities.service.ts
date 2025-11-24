@@ -19,6 +19,8 @@ import { ActivityType } from 'src/common/enums/activity-type.enum';
 
 @Injectable()
 export class ActivitiesService {
+  // 
+  private readonly MAX_UNIT_SCORE = 10;
   private readonly activityRelations = ['class', 'class.discipline', 'class.teacher'];
 
   constructor(
@@ -69,15 +71,39 @@ export class ActivitiesService {
   }
 
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
-    const { classId, unit, ...rest } = createActivityDto;
+    const { classId, unit, maxScore, ...rest } = createActivityDto;
 
     const classEntity = await this.findClassOrThrowException(classId);
 
     // Normaliza o valor da unidade antes de salvar
     const normalizedUnit = this.normalizeUnit(unit);
 
+    const existingActivities = await this.activityRepository.find({
+      where: {
+        class: {id: classId},
+        unit: normalizedUnit
+      },
+      select: ['maxScore'],
+    })
+
+    const currentTotalScore = existingActivities.reduce(
+      (sum, activity) => sum + (activity.maxScore || 0),
+      0,
+    );
+    const newActivityScore = Number(maxScore || 0);
+
+    if (currentTotalScore + newActivityScore > this.MAX_UNIT_SCORE) {
+      throw new BadRequestException(
+        `A soma das notas para a ${normalizedUnit} não pode exceder ${this.MAX_UNIT_SCORE} pontos. ` +
+          `Total atual: ${currentTotalScore}, Nova atividade: ${newActivityScore}, Total final seria: ${
+            currentTotalScore + newActivityScore
+          }`,
+      );
+    }
+
     const activity = this.activityRepository.create({
       ...rest,
+      maxScore,
       unit: normalizedUnit,
       class: classEntity,
     });
