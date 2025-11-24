@@ -3,4 +3,5 @@ export enum PaymentStatus {
   PAID = 'paid',
   OVERDUE = 'overdue',
   CANCELED = 'canceled',
+  SCHEDULED = 'scheduled',
 }
