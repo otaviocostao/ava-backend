@@ -12,5 +12,6 @@ import { Schedule } from 'src/schedules/entities/schedule.entity';
     ],
   controllers: [LessonPlansController],
   providers: [LessonPlansService],
+  exports: [LessonPlansService],
 })
 export class LessonPlansModule {}

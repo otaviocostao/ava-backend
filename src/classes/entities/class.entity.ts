@@ -20,13 +20,9 @@ export class Class {
   code: string;
 
   // Período letivo da turma
-  @ManyToOne(() => AcademicPeriod, { nullable: true, onDelete: 'RESTRICT' })
+  @ManyToOne(() => AcademicPeriod, { nullable: false, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'academic_period_id' })
   academicPeriod: AcademicPeriod;
-
-  // Coluna temporária para migração - será removida após migração
-  @Column({ length: 50, nullable: true })
-  semester?: string;
 
   // Ano letivo da turma
   @Column({ type: 'int', nullable: false })

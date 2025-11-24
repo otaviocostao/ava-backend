@@ -174,13 +174,13 @@ async function migrateAcademicPeriods() {
 
     migratedCount = 0;
     for (const classEntity of allClasses) {
-      // Buscar semester usando query raw se necessário
+      // Buscar semester usando query raw (pode ainda existir no banco de dados antigo)
       const rawData = await dataSource.query(
         `SELECT semester FROM classes WHERE id = $1`,
         [classEntity.id]
       );
 
-      const semester = rawData[0]?.semester || classEntity.semester;
+      const semester = rawData[0]?.semester;
 
       if (semester) {
         // Normalizar formato (pode ser YYYY.1, YYYY-1, etc)

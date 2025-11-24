@@ -22,6 +22,12 @@ export class AcademicPeriodsController {
     return this.academicPeriodsService.findAll();
   }
 
+  @Get('by-period/:period')
+  @ApiOperation({ summary: 'Busca um período letivo pela string do período (ex: 2025.1).' })
+  findByPeriod(@Param('period') period: string) {
+    return this.academicPeriodsService.findByPeriod(period);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Busca um período letivo por ID.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {

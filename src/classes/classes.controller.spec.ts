@@ -38,7 +38,7 @@ describe('ClassesController', () => {
   it('should create a class using the service', async () => {
     const dto: CreateClassDto = {
       code: 'CLS001',
-      semester: '2025-1',
+      academicPeriodId: 'academic-period-id',
       year: 2025,
       disciplineId: 'discipline-id',
       teacherId: 'teacher-id',
@@ -58,8 +58,8 @@ describe('ClassesController', () => {
 
   it('should return all classes from the service', async () => {
     const classes = [
-      { id: 'class-1', code: 'CLS001', semester: '2025-1', year: 2025 },
-      { id: 'class-2', code: 'CLS002', semester: '2025-2', year: 2025 },
+      { id: 'class-1', code: 'CLS001', year: 2025 },
+      { id: 'class-2', code: 'CLS002', year: 2025 },
     ] as unknown as Class[];
 
     mockClassesService.findAll.mockResolvedValue(classes);
@@ -75,7 +75,6 @@ describe('ClassesController', () => {
     const classEntity = {
       id,
       code: 'CLS001',
-      semester: '2025-1',
       year: 2025,
     } as unknown as Class;
 
@@ -90,12 +89,11 @@ describe('ClassesController', () => {
   it('should update a class using the service', async () => {
     const id = 'class-id';
     const dto: UpdateClassDto = {
-      semester: '2025-2',
+      academicPeriodId: 'academic-period-id',
     };
     const updatedClass = {
       id,
       code: 'CLS001',
-      semester: '2025-2',
       year: 2025,
     } as unknown as Class;
 
