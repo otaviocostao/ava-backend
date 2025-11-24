@@ -3,11 +3,15 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagg
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt.guard';
+import { UsersService } from 'src/users/users.service';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post('login')
   @ApiOperation({ 
@@ -50,6 +54,7 @@ export class AuthController {
     schema: {
       example: {
         id: 'uuid-do-usuario',
+        name: 'Nome do Usuário',
         email: 'usuario@email.com',
         roles: ['student']
       }
@@ -59,8 +64,16 @@ export class AuthController {
     status: 401, 
     description: 'Token JWT inválido ou expirado. É necessário fazer login novamente.'
   })
-  me(@Req() req: any) {
-    return req.user;
+  async me(@Req() req: any) {
+    const userId = req.user.id;
+    const user = await this.usersService.findOne(userId);
+    const roles = (user.roles || []).map((r) => r.name);
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      roles,
+    };
   }
 }
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { Class } from './entities/class.entity';
@@ -11,6 +11,10 @@ import { Schedule } from 'src/schedules/entities/schedule.entity';
 import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { LessonPlan } from 'src/lesson-plans/entities/lesson-plan.entity';
 import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
+import { SchedulesService } from 'src/schedules/schedules.service';
+import { LessonPlansService } from 'src/lesson-plans/lesson-plans.service';
+import { AcademicPeriodsService } from 'src/academic-periods/academic-periods.service';
+import { DayOfWeek } from 'src/common/enums/day-of-week.enum';
 
 @Injectable()
 export class ClassesService {
@@ -32,25 +36,84 @@ export class ClassesService {
     private readonly lessonPlanRepository: Repository<LessonPlan>,
     @InjectRepository(AcademicPeriod)
     private readonly academicPeriodRepository: Repository<AcademicPeriod>,
+    private readonly schedulesService: SchedulesService,
+    private readonly lessonPlansService: LessonPlansService,
+    private readonly academicPeriodsService: AcademicPeriodsService,
   ) {}
+
+  // Método auxiliar para gerar datas de um dia da semana no intervalo
+  private generateDatesForDayOfWeek(startDate: Date, endDate: Date, dayOfWeek: DayOfWeek): Date[] {
+    const dates: Date[] = [];
+    const dayOfWeekMap: Record<DayOfWeek, number> = {
+      [DayOfWeek.SUNDAY]: 0,
+      [DayOfWeek.MONDAY]: 1,
+      [DayOfWeek.TUESDAY]: 2,
+      [DayOfWeek.WEDNESDAY]: 3,
+      [DayOfWeek.THURSDAY]: 4,
+      [DayOfWeek.FRIDAY]: 5,
+      [DayOfWeek.SATURDAY]: 6,
+    };
+
+    const targetDay = dayOfWeekMap[dayOfWeek];
+    const currentDate = new Date(startDate);
+    currentDate.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    // Encontrar o primeiro dia da semana alvo
+    const dayDiff = (targetDay - currentDate.getDay() + 7) % 7;
+    currentDate.setDate(currentDate.getDate() + dayDiff);
+
+    // Gerar todas as datas do dia da semana no intervalo
+    while (currentDate <= end) {
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 7); // Próxima semana
+    }
+
+    return dates;
+  }
+
+  // Formatar data para DD/MM/YYYY
+  private formatDate(date: Date): string {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
 
   // Criar nova Classe
   async create(createClassDto: CreateClassDto): Promise<Class> {
-    const { disciplineId, teacherId, academicPeriodId, ...classData } = createClassDto;
+    const { 
+      disciplineId, 
+      teacherId, 
+      academicPeriodId, 
+      dayOfWeek,
+      startTime,
+      endTime,
+      room,
+      ...classData 
+    } = createClassDto;
 
-    const [discipline, academicPeriod] = await Promise.all([
-      this.disciplineRepository.findOneBy({ id: disciplineId }),
-      this.academicPeriodRepository.findOneBy({ id: academicPeriodId }),
-    ]);
-
+    // Buscar disciplina
+    const discipline = await this.disciplineRepository.findOneBy({ id: disciplineId });
     if (!discipline) {
       throw new NotFoundException(`Disciplina com ID "${disciplineId}" não encontrada.`);
     }
 
+    // Buscar período acadêmico por ID
+    const academicPeriod = await this.academicPeriodRepository.findOneBy({ id: academicPeriodId });
     if (!academicPeriod) {
       throw new NotFoundException(`Período letivo com ID "${academicPeriodId}" não encontrado.`);
     }
 
+    // Validar que o período tem datas de início e fim
+    if (!academicPeriod.startDate || !academicPeriod.endDate) {
+      throw new BadRequestException(
+        `O período letivo "${academicPeriod.period}" não possui datas de início e/ou fim definidas.`
+      );
+    }
+
+    // Buscar professor (opcional)
     let teacher: User | null = null;
     if (teacherId) {
       teacher = await this.userRepository.findOneBy({ id: teacherId });
@@ -59,6 +122,7 @@ export class ClassesService {
       }
     }
 
+    // Criar a turma
     const newClass = this.classRepository.create({
       ...classData,
       discipline,
@@ -66,7 +130,43 @@ export class ClassesService {
       ...(teacher && { teacher }),
     });
 
-    return this.classRepository.save(newClass);
+    const savedClass = await this.classRepository.save(newClass);
+
+    // Se os campos de schedule foram fornecidos, criar schedule e lesson plans
+    if (dayOfWeek && startTime && endTime) {
+      // Criar o schedule
+      const schedule = await this.schedulesService.create({
+        classId: savedClass.id,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room: room || undefined,
+      });
+
+      // Gerar todas as datas do dia da semana no intervalo do período acadêmico
+      const lessonDates = this.generateDatesForDayOfWeek(
+        academicPeriod.startDate,
+        academicPeriod.endDate,
+        dayOfWeek
+      );
+
+      // Criar lesson plans para cada data
+      for (const date of lessonDates) {
+        const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        const formattedDateDisplay = this.formatDate(date);
+        const content = `Plano de aula para ${formattedDateDisplay} - A definir`;
+
+        await this.lessonPlansService.create({
+          classId: savedClass.id,
+          scheduleId: schedule.id,
+          date: formattedDate,
+          status: 'agendada',
+          content,
+        });
+      }
+    }
+
+    return savedClass;
   }
 
   // Buscar todas as Classes (opcionalmente filtrando por curso via disciplinas)
@@ -296,6 +396,7 @@ export class ClassesService {
           sala: schedules[0]?.room || 'Não definida',
           atividades,
           avaliacoes,
+          semestre: classEntity.academicPeriod?.period || undefined,
           listaAlunos: enrollments.map((enrollment) => ({
             id: enrollment.student.id,
             nome: enrollment.student.name,

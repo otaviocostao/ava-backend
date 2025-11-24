@@ -10,10 +10,16 @@ import { Schedule } from 'src/schedules/entities/schedule.entity';
 import { Attendance } from 'src/attendances/entities/attendance.entity';
 import { LessonPlan } from 'src/lesson-plans/entities/lesson-plan.entity';
 import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
+import { SchedulesModule } from 'src/schedules/schedules.module';
+import { LessonPlansModule } from 'src/lesson-plans/lesson-plans.module';
+import { AcademicPeriodsModule } from 'src/academic-periods/academic-periods.module';
 
 @Module({
   imports: [
       TypeOrmModule.forFeature([Class, Discipline, User, Enrollment, Schedule, Attendance, LessonPlan, AcademicPeriod]),
+      SchedulesModule,
+      LessonPlansModule,
+      AcademicPeriodsModule,
     ],
   controllers: [ClassesController],
   providers: [ClassesService],

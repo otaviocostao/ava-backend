@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AcademicPeriod } from './entities/academic-period.entity';
@@ -13,7 +13,7 @@ export class AcademicPeriodsService {
   ) {}
 
   async create(createAcademicPeriodDto: CreateAcademicPeriodDto): Promise<AcademicPeriod> {
-    const { period } = createAcademicPeriodDto;
+    const { period, startDate, endDate } = createAcademicPeriodDto;
 
     // Verificar se já existe um período com o mesmo valor
     const existingPeriod = await this.academicPeriodRepository.findOne({
@@ -24,7 +24,19 @@ export class AcademicPeriodsService {
       throw new ConflictException(`Período letivo "${period}" já existe.`);
     }
 
-    const academicPeriod = this.academicPeriodRepository.create({ period });
+    // Validar que a data de fim é posterior à data de início
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (end <= start) {
+      throw new BadRequestException('A data de fim deve ser posterior à data de início.');
+    }
+
+    const academicPeriod = this.academicPeriodRepository.create({
+      period,
+      startDate: start,
+      endDate: end,
+    });
     return this.academicPeriodRepository.save(academicPeriod);
   }
 
@@ -68,6 +80,22 @@ export class AcademicPeriodsService {
       academicPeriod.period = updateAcademicPeriodDto.period;
     }
 
+    // Atualizar datas se fornecidas
+    const startDate = updateAcademicPeriodDto.startDate 
+      ? new Date(updateAcademicPeriodDto.startDate) 
+      : academicPeriod.startDate;
+    const endDate = updateAcademicPeriodDto.endDate 
+      ? new Date(updateAcademicPeriodDto.endDate) 
+      : academicPeriod.endDate;
+
+    // Validar que a data de fim é posterior à data de início
+    if (endDate <= startDate) {
+      throw new BadRequestException('A data de fim deve ser posterior à data de início.');
+    }
+
+    academicPeriod.startDate = startDate;
+    academicPeriod.endDate = endDate;
+
     return this.academicPeriodRepository.save(academicPeriod);
   }
 
@@ -83,4 +111,5 @@ export class AcademicPeriodsService {
     }
   }
 }
+
 
