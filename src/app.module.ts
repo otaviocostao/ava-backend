@@ -38,6 +38,7 @@ import { CommunicationsModule } from './communications/communications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ExamsModule } from './exams/exams.module';
 import { AcademicPeriodsModule } from './academic-periods/academic-periods.module';
+import { FinancialModule } from './financial/financial.module';
 
 @Module({
   imports: [
@@ -91,7 +92,7 @@ import { AcademicPeriodsModule } from './academic-periods/academic-periods.modul
         };
       },
     }),
-    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule, StudentCoursesModule, CommunicationsModule, AnalyticsModule, ExamsModule, AcademicPeriodsModule
+    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule, StudentCoursesModule, CommunicationsModule, AnalyticsModule, ExamsModule, AcademicPeriodsModule, FinancialModule
   ],
   controllers: [AppController],
   providers: [AppService, AppContextService, LiveClassGateway, DatabaseInitService],
