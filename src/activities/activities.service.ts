@@ -325,7 +325,10 @@ export class ActivitiesService {
     await this.findClassOrThrowException(classId);
 
     return this.activityRepository.find({
-      where: { class: { id: classId } },
+      where: { 
+        class: { id: classId },
+        type: Not(ActivityType.EXAM)
+      },
       relations: this.activityRelations,
       order: { dueDate: 'ASC' },
     });
