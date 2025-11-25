@@ -25,13 +25,7 @@ async function bootstrap() {
   appContextService.setApp(app);
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error('Origem não permitida pelo CORS'));
-      }
-    },
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -71,7 +65,7 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT ?? 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`🚀 Aplicação rodando em: http://localhost:${port}`);
   console.log(`📄 Documentação Swagger disponível em: http://localhost:${port}/api`);
 }

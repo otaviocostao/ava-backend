@@ -4,6 +4,7 @@ import { StudentCoursesService } from './student-courses.service';
 import { CreateStudentCourseDto } from './dto/create-student-course.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Course } from 'src/courses/entities/course.entity';
+import { StudentCourse } from './entities/student-course.entity';
 
 @ApiTags('Student Courses')
 @Controller()
@@ -37,7 +38,28 @@ export class StudentCoursesController {
     return this.service.findStudentsByCourse(courseId);
   }
 
-  @Get('users/:studentId/courses')
+  // Rotas mais específicas primeiro (com mais parâmetros)
+  @Delete('student-courses/users/:studentId/courses/:courseId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove vínculo aluno↔curso por studentId e courseId.' })
+  @ApiNoContentResponse({ description: 'Vínculo removido.' })
+  @ApiNotFoundResponse({ description: 'Vínculo não encontrado.' })
+  removeByStudentAndCourse(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+  ) {
+    return this.service.removeByStudentAndCourse(studentId, courseId);
+  }
+
+  @Get('student-courses/users/:studentId/links')
+  @ApiOperation({ summary: 'Lista links completos (com IDs) de cursos vinculados a um aluno.' })
+  @ApiOkResponse({ description: 'Lista de links do aluno.' })
+  @ApiNotFoundResponse({ description: 'Aluno não encontrado (se aplicável).' })
+  getStudentCourseLinks(@Param('studentId', ParseUUIDPipe) studentId: string) {
+    return this.service.findStudentCourseLinks(studentId);
+  }
+
+  @Get('student-courses/users/:studentId/courses')
   @ApiOperation({ summary: 'Lista cursos vinculados a um aluno.' })
   @ApiOkResponse({ description: 'Lista de cursos do aluno.', type: [Course] })
   @ApiNotFoundResponse({ description: 'Aluno não encontrado (se aplicável).' })

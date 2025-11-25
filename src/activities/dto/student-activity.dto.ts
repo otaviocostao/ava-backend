@@ -9,4 +9,5 @@ export interface StudentActivityDto {
   dataConclusao: string | null;
   semestre?: string;
   classId?: string;
+  type?: string;
 }

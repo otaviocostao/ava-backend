@@ -562,7 +562,7 @@ export class StudentsService {
     // Busca todos os enrollments do aluno
     const enrollments = await this.enrollmentRepository.find({
       where: { student: { id: studentId } },
-      relations: ['class', 'class.discipline'],
+      relations: ['class', 'class.discipline', 'class.academicPeriod'],
     });
 
     // Busca todas as notas e presenças do aluno
@@ -644,6 +644,11 @@ export class StudentsService {
       const latestEnrollment = disciplineEnrollments.sort(
         (a, b) => (new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()),
       )[0];
+
+      // Verifica se o enrollment tem classe e período acadêmico
+      if (!latestEnrollment.class || !latestEnrollment.class.academicPeriod) {
+        return { status: 'Pendente' };
+      }
 
       const classPeriod = latestEnrollment.class.academicPeriod.period;
       const enrollmentGrades = gradesByEnrollmentId.get(latestEnrollment.id) || [];

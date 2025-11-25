@@ -16,9 +16,14 @@ import { ActivityUnit } from '../common/enums/activity-unit.enum';
 import { StudentActivityDto } from './dto/student-activity.dto';
 import { Grade } from 'src/grades/entities/grade.entity';
 import { ActivityType } from 'src/common/enums/activity-type.enum';
+import { ExamAttempt } from '../exams/entities/exam-attempt.entity';
+import { Exam } from '../exams/entities/exam.entity';
+import { ExamAttemptStatus } from '../common/enums/exam-attempt-status.enum';
 
 @Injectable()
 export class ActivitiesService {
+  // 
+  private readonly MAX_UNIT_SCORE = 10;
   private readonly activityRelations = ['class', 'class.discipline', 'class.teacher'];
 
   constructor(
@@ -34,6 +39,10 @@ export class ActivitiesService {
     private readonly enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(Grade)
     private readonly gradeRepository: Repository<Grade>,
+    @InjectRepository(ExamAttempt)
+    private readonly examAttemptRepository: Repository<ExamAttempt>,
+    @InjectRepository(Exam)
+    private readonly examRepository: Repository<Exam>,
     private readonly storageService: StorageService,
   ) {}
 
@@ -69,15 +78,39 @@ export class ActivitiesService {
   }
 
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
-    const { classId, unit, ...rest } = createActivityDto;
+    const { classId, unit, maxScore, ...rest } = createActivityDto;
 
     const classEntity = await this.findClassOrThrowException(classId);
 
     // Normaliza o valor da unidade antes de salvar
     const normalizedUnit = this.normalizeUnit(unit);
 
+    const existingActivities = await this.activityRepository.find({
+      where: {
+        class: {id: classId},
+        unit: normalizedUnit
+      },
+      select: ['maxScore'],
+    })
+
+    const currentTotalScore = existingActivities.reduce(
+      (sum, activity) => sum + (activity.maxScore || 0),
+      0,
+    );
+    const newActivityScore = Number(maxScore || 0);
+
+    if (currentTotalScore + newActivityScore > this.MAX_UNIT_SCORE) {
+      throw new BadRequestException(
+        `A soma das notas para a ${normalizedUnit} não pode exceder ${this.MAX_UNIT_SCORE} pontos. ` +
+          `Total atual: ${currentTotalScore}, Nova atividade: ${newActivityScore}, Total final seria: ${
+            currentTotalScore + newActivityScore
+          }`,
+      );
+    }
+
     const activity = this.activityRepository.create({
       ...rest,
+      maxScore,
       unit: normalizedUnit,
       class: classEntity,
     });
@@ -266,7 +299,40 @@ export class ActivitiesService {
   }
 
   async update(id: string, updateActivityDto: UpdateActivityDto): Promise<Activity> {
-    const { classId, unit, ...rest } = updateActivityDto;
+    const { classId, unit, maxScore, ...rest } = updateActivityDto;
+
+    // Buscar a atividade existente para obter dados atuais
+    const existingActivity = await this.findOne(id);
+    const activityClassId = classId || existingActivity.class.id;
+    const finalUnit = unit !== undefined ? this.normalizeUnit(unit) : (existingActivity.unit || null);
+    const finalMaxScore = maxScore !== undefined ? maxScore : existingActivity.maxScore;
+
+    // Validar limite de pontuação por unidade se maxScore ou unit foram alterados
+    // Só validar se finalUnit não for null
+    if ((maxScore !== undefined || unit !== undefined) && finalUnit !== null) {
+      const existingActivities = await this.activityRepository.find({
+        where: {
+          class: { id: activityClassId },
+          unit: finalUnit as string, // Type assertion porque já verificamos que não é null
+        },
+        select: ['id', 'maxScore'],
+      });
+
+      // Calcular total excluindo a atividade atual (que está sendo editada)
+      const currentTotalScore = existingActivities
+        .filter((a) => a.id !== id) // Excluir a atividade atual
+        .reduce((sum, activity) => sum + (activity.maxScore || 0), 0);
+
+      const newActivityScore = Number(finalMaxScore || 0);
+      const totalFinal = currentTotalScore + newActivityScore;
+
+      if (totalFinal > this.MAX_UNIT_SCORE) {
+        throw new BadRequestException(
+          `A soma das notas para a ${finalUnit} não pode exceder ${this.MAX_UNIT_SCORE} pontos. ` +
+            `Total atual (sem esta atividade): ${currentTotalScore}, Nova pontuação: ${newActivityScore}, Total final seria: ${totalFinal}`,
+        );
+      }
+    }
 
     const preloadData: Partial<Activity> = {
       id,
@@ -276,6 +342,11 @@ export class ActivitiesService {
     // Normaliza o valor da unidade se fornecido
     if (unit !== undefined) {
       preloadData.unit = this.normalizeUnit(unit);
+    }
+
+    // Incluir maxScore se fornecido
+    if (maxScore !== undefined) {
+      preloadData.maxScore = maxScore;
     }
 
     if (classId !== undefined) {
@@ -299,7 +370,10 @@ export class ActivitiesService {
     await this.findClassOrThrowException(classId);
 
     return this.activityRepository.find({
-      where: { class: { id: classId } },
+      where: { 
+        class: { id: classId },
+        type: Not(ActivityType.EXAM && ActivityType.VIRTUAL_EXAM)
+      },
       relations: this.activityRelations,
       order: { dueDate: 'ASC' },
     });
@@ -352,32 +426,90 @@ export class ActivitiesService {
     const gradesMap = new Map<string, Grade>();
     grades.forEach(grade => gradesMap.set(grade.activity.id, grade));
     
+    // Buscar ExamAttempt para atividades virtual_exam
+    const virtualExamActivities = activities.filter(a => a.type === ActivityType.VIRTUAL_EXAM);
+    const examAttempts = virtualExamActivities.length > 0
+      ? await this.examAttemptRepository.find({
+          where: {
+            student: { id: studentId },
+            exam: {
+              activity: { id: In(virtualExamActivities.map(a => a.id)) }
+            }
+          },
+          relations: ['exam', 'exam.activity'],
+        })
+      : [];
+    
+    // Criar mapa de ExamAttempt por activityId
+    const examAttemptsMap = new Map<string, ExamAttempt>();
+    examAttempts.forEach(attempt => {
+      const activityId = attempt.exam?.activity?.id;
+      if (activityId) {
+        // Se já existe uma tentativa, manter apenas a mais recente
+        const existing = examAttemptsMap.get(activityId);
+        if (!existing || new Date(attempt.startedAt) > new Date(existing.startedAt)) {
+          examAttemptsMap.set(activityId, attempt);
+        }
+      }
+    });
+    
     const studentActivities = activities.map(activity => {
       const submission = submissionsMap.get(activity.id);
-
       const grade = gradesMap.get(activity.id);
       
       let status: 'pendente' | 'concluido' | 'avaliado';
       let nota: number | null = null;
       let dataConclusao: string | null = null;
       
-      if (submission) {
-        switch (submission.status) {
-          case ActivitySubmissionStatus.SUBMITTED:
-            status = 'concluido'; 
-            break;
-          case ActivitySubmissionStatus.COMPLETED: 
-            status = 'avaliado';
-            nota = submission.grade ?? null;
-            break;
-          default:
-            status = 'pendente';
+      // Para atividades virtual_exam, usar ExamAttempt
+      if (activity.type === ActivityType.VIRTUAL_EXAM) {
+        const attempt = examAttemptsMap.get(activity.id);
+        
+        if (attempt) {
+          switch (attempt.status) {
+            case ExamAttemptStatus.IN_PROGRESS:
+              status = 'pendente';
+              break;
+            case ExamAttemptStatus.SUBMITTED:
+              status = 'concluido';
+              nota = attempt.autoGradeScore ?? attempt.manualGradeScore ?? null;
+              dataConclusao = attempt.submittedAt
+                ? new Date(attempt.submittedAt).toLocaleDateString('pt-BR')
+                : null;
+              break;
+            case ExamAttemptStatus.GRADED:
+              status = 'avaliado';
+              nota = attempt.score ?? attempt.autoGradeScore ?? attempt.manualGradeScore ?? null;
+              dataConclusao = attempt.submittedAt
+                ? new Date(attempt.submittedAt).toLocaleDateString('pt-BR')
+                : null;
+              break;
+            default:
+              status = 'pendente';
+          }
+        } else {
+          status = 'pendente';
         }
-        dataConclusao = submission.submittedAt
-          ? new Date(submission.submittedAt).toLocaleDateString('pt-BR')
-          : null;
       } else {
-        status = 'pendente';
+        // Para atividades normais, usar ActivitySubmission
+        if (submission) {
+          switch (submission.status) {
+            case ActivitySubmissionStatus.SUBMITTED:
+              status = 'concluido'; 
+              break;
+            case ActivitySubmissionStatus.COMPLETED: 
+              status = 'avaliado';
+              nota = submission.grade ?? null;
+              break;
+            default:
+              status = 'pendente';
+          }
+          dataConclusao = submission.submittedAt
+            ? new Date(submission.submittedAt).toLocaleDateString('pt-BR')
+            : null;
+        } else {
+          status = 'pendente';
+        }
       }
       
       return {
@@ -391,6 +523,7 @@ export class ActivitiesService {
         dataConclusao,
         semestre: activity.class.academicPeriod?.period || undefined,
         classId: activity.class.id,
+        type: activity.type,
       };
     });
 
