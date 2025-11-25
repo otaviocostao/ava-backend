@@ -16,6 +16,9 @@ import { ActivityUnit } from '../common/enums/activity-unit.enum';
 import { StudentActivityDto } from './dto/student-activity.dto';
 import { Grade } from 'src/grades/entities/grade.entity';
 import { ActivityType } from 'src/common/enums/activity-type.enum';
+import { ExamAttempt } from '../exams/entities/exam-attempt.entity';
+import { Exam } from '../exams/entities/exam.entity';
+import { ExamAttemptStatus } from '../common/enums/exam-attempt-status.enum';
 
 @Injectable()
 export class ActivitiesService {
@@ -36,6 +39,10 @@ export class ActivitiesService {
     private readonly enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(Grade)
     private readonly gradeRepository: Repository<Grade>,
+    @InjectRepository(ExamAttempt)
+    private readonly examAttemptRepository: Repository<ExamAttempt>,
+    @InjectRepository(Exam)
+    private readonly examRepository: Repository<Exam>,
     private readonly storageService: StorageService,
   ) {}
 
@@ -419,32 +426,90 @@ export class ActivitiesService {
     const gradesMap = new Map<string, Grade>();
     grades.forEach(grade => gradesMap.set(grade.activity.id, grade));
     
+    // Buscar ExamAttempt para atividades virtual_exam
+    const virtualExamActivities = activities.filter(a => a.type === ActivityType.VIRTUAL_EXAM);
+    const examAttempts = virtualExamActivities.length > 0
+      ? await this.examAttemptRepository.find({
+          where: {
+            student: { id: studentId },
+            exam: {
+              activity: { id: In(virtualExamActivities.map(a => a.id)) }
+            }
+          },
+          relations: ['exam', 'exam.activity'],
+        })
+      : [];
+    
+    // Criar mapa de ExamAttempt por activityId
+    const examAttemptsMap = new Map<string, ExamAttempt>();
+    examAttempts.forEach(attempt => {
+      const activityId = attempt.exam?.activity?.id;
+      if (activityId) {
+        // Se já existe uma tentativa, manter apenas a mais recente
+        const existing = examAttemptsMap.get(activityId);
+        if (!existing || new Date(attempt.startedAt) > new Date(existing.startedAt)) {
+          examAttemptsMap.set(activityId, attempt);
+        }
+      }
+    });
+    
     const studentActivities = activities.map(activity => {
       const submission = submissionsMap.get(activity.id);
-
       const grade = gradesMap.get(activity.id);
       
       let status: 'pendente' | 'concluido' | 'avaliado';
       let nota: number | null = null;
       let dataConclusao: string | null = null;
       
-      if (submission) {
-        switch (submission.status) {
-          case ActivitySubmissionStatus.SUBMITTED:
-            status = 'concluido'; 
-            break;
-          case ActivitySubmissionStatus.COMPLETED: 
-            status = 'avaliado';
-            nota = submission.grade ?? null;
-            break;
-          default:
-            status = 'pendente';
+      // Para atividades virtual_exam, usar ExamAttempt
+      if (activity.type === ActivityType.VIRTUAL_EXAM) {
+        const attempt = examAttemptsMap.get(activity.id);
+        
+        if (attempt) {
+          switch (attempt.status) {
+            case ExamAttemptStatus.IN_PROGRESS:
+              status = 'pendente';
+              break;
+            case ExamAttemptStatus.SUBMITTED:
+              status = 'concluido';
+              nota = attempt.autoGradeScore ?? attempt.manualGradeScore ?? null;
+              dataConclusao = attempt.submittedAt
+                ? new Date(attempt.submittedAt).toLocaleDateString('pt-BR')
+                : null;
+              break;
+            case ExamAttemptStatus.GRADED:
+              status = 'avaliado';
+              nota = attempt.score ?? attempt.autoGradeScore ?? attempt.manualGradeScore ?? null;
+              dataConclusao = attempt.submittedAt
+                ? new Date(attempt.submittedAt).toLocaleDateString('pt-BR')
+                : null;
+              break;
+            default:
+              status = 'pendente';
+          }
+        } else {
+          status = 'pendente';
         }
-        dataConclusao = submission.submittedAt
-          ? new Date(submission.submittedAt).toLocaleDateString('pt-BR')
-          : null;
       } else {
-        status = 'pendente';
+        // Para atividades normais, usar ActivitySubmission
+        if (submission) {
+          switch (submission.status) {
+            case ActivitySubmissionStatus.SUBMITTED:
+              status = 'concluido'; 
+              break;
+            case ActivitySubmissionStatus.COMPLETED: 
+              status = 'avaliado';
+              nota = submission.grade ?? null;
+              break;
+            default:
+              status = 'pendente';
+          }
+          dataConclusao = submission.submittedAt
+            ? new Date(submission.submittedAt).toLocaleDateString('pt-BR')
+            : null;
+        } else {
+          status = 'pendente';
+        }
       }
       
       return {
@@ -458,6 +523,7 @@ export class ActivitiesService {
         dataConclusao,
         semestre: activity.class.academicPeriod?.period || undefined,
         classId: activity.class.id,
+        type: activity.type,
       };
     });
 
