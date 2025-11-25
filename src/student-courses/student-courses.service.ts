@@ -80,6 +80,33 @@ export class StudentCoursesService {
     return links.map(l => l.course);
   }
 
+  // Buscar links completos do aluno (com IDs dos links)
+  async findStudentCourseLinks(studentId: string): Promise<StudentCourse[]> {
+    return this.studentCourseRepository.find({
+      where: { student: { id: studentId } },
+      relations: ['course', 'entryAcademicPeriod'],
+    });
+  }
+
+  // Remover vínculo por studentId e courseId
+  async removeByStudentAndCourse(studentId: string, courseId: string): Promise<void> {
+    const link = await this.studentCourseRepository.findOne({
+      where: { 
+        student: { id: studentId }, 
+        course: { id: courseId } 
+      },
+      relations: ['course'],
+    });
+    
+    if (!link) {
+      throw new NotFoundException(`Vínculo entre aluno e curso não encontrado.`);
+    }
+    
+    const courseIdForRecalc = link.course.id;
+    await this.studentCourseRepository.delete(link.id);
+    await this.recalculateAndPersistCourseStudentsCount(courseIdForRecalc);
+  }
+
   async recalculateAndPersistCourseStudentsCount(courseId: string): Promise<void> {
     const row = await this.studentCourseRepository.createQueryBuilder('sc')
       .select('COUNT(sc.id)', 'count')
