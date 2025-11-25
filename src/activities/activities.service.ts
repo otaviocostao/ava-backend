@@ -372,7 +372,7 @@ export class ActivitiesService {
     return this.activityRepository.find({
       where: { 
         class: { id: classId },
-        type: Not(ActivityType.EXAM)
+        type: Not(ActivityType.EXAM && ActivityType.VIRTUAL_EXAM)
       },
       relations: this.activityRelations,
       order: { dueDate: 'ASC' },
