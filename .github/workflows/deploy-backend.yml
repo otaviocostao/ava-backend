@@ -1,0 +1,44 @@
+name: Deploy Backend EC2
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js (Para testes rápidos de CI)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Deploy na EC2 via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        script: |
+          cd ~/ava-backend
+          
+          sudo chown -R ubuntu:ubuntu .
+
+          git pull origin master
+          
+          sudo docker-compose down --remove-orphans
+          
+          sudo docker system prune -f
+          
+          sudo docker-compose up -d --build --force-recreate
