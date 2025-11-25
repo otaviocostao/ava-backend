@@ -11,6 +11,8 @@ import { VideoLesson } from "src/video-lessons/entities/video-lesson.entity";
 import { News } from "src/news/entities/news.entity";
 import { Attendance } from "src/attendances/entities/attendance.entity";
 import { Department } from "src/departments/entities/department.entity";
+import { TeacherSemesterAvailability } from "src/teacher-semester-availabilities/entities/teacher-semester-availability.entity";
+import { TeacherCourse } from "src/teacher-courses/entities/teacher-course.entity";
 
 @Entity("users")
 export class User {
@@ -69,6 +71,12 @@ export class User {
 
     @OneToMany(() => Availability, (availability) => availability.teacher)
     availabilities: Availability[];
+
+    @OneToMany(() => TeacherSemesterAvailability, (availability) => availability.teacher)
+    teacherSemesterAvailabilities: TeacherSemesterAvailability[];
+
+    @OneToMany(() => TeacherCourse, (teacherCourse) => teacherCourse.teacher)
+    teacherCourses: TeacherCourse[];
     
     @OneToMany(() => Material, (material) => material.uploadedBy)
     materialsUploaded: Material[];
