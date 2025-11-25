@@ -1,15 +1,22 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+RUN npm install -g typescript @nestjs/cli
 
-RUN npm install
+COPY package*.json ./
+COPY tsconfig*.json ./
+
+RUN npm ci || npm install
 
 COPY . .
 
+RUN echo "--- LISTANDO ARQUIVOS COPIADOS ---" && ls -la && ls -la src
+
 RUN npm run build
+
+RUN echo "--- LISTANDO PASTA DIST ---" && ls -la dist
 
 EXPOSE 3001
 
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/src/main"]
