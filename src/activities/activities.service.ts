@@ -292,7 +292,40 @@ export class ActivitiesService {
   }
 
   async update(id: string, updateActivityDto: UpdateActivityDto): Promise<Activity> {
-    const { classId, unit, ...rest } = updateActivityDto;
+    const { classId, unit, maxScore, ...rest } = updateActivityDto;
+
+    // Buscar a atividade existente para obter dados atuais
+    const existingActivity = await this.findOne(id);
+    const activityClassId = classId || existingActivity.class.id;
+    const finalUnit = unit !== undefined ? this.normalizeUnit(unit) : (existingActivity.unit || null);
+    const finalMaxScore = maxScore !== undefined ? maxScore : existingActivity.maxScore;
+
+    // Validar limite de pontuação por unidade se maxScore ou unit foram alterados
+    // Só validar se finalUnit não for null
+    if ((maxScore !== undefined || unit !== undefined) && finalUnit !== null) {
+      const existingActivities = await this.activityRepository.find({
+        where: {
+          class: { id: activityClassId },
+          unit: finalUnit as string, // Type assertion porque já verificamos que não é null
+        },
+        select: ['id', 'maxScore'],
+      });
+
+      // Calcular total excluindo a atividade atual (que está sendo editada)
+      const currentTotalScore = existingActivities
+        .filter((a) => a.id !== id) // Excluir a atividade atual
+        .reduce((sum, activity) => sum + (activity.maxScore || 0), 0);
+
+      const newActivityScore = Number(finalMaxScore || 0);
+      const totalFinal = currentTotalScore + newActivityScore;
+
+      if (totalFinal > this.MAX_UNIT_SCORE) {
+        throw new BadRequestException(
+          `A soma das notas para a ${finalUnit} não pode exceder ${this.MAX_UNIT_SCORE} pontos. ` +
+            `Total atual (sem esta atividade): ${currentTotalScore}, Nova pontuação: ${newActivityScore}, Total final seria: ${totalFinal}`,
+        );
+      }
+    }
 
     const preloadData: Partial<Activity> = {
       id,
@@ -302,6 +335,11 @@ export class ActivitiesService {
     // Normaliza o valor da unidade se fornecido
     if (unit !== undefined) {
       preloadData.unit = this.normalizeUnit(unit);
+    }
+
+    // Incluir maxScore se fornecido
+    if (maxScore !== undefined) {
+      preloadData.maxScore = maxScore;
     }
 
     if (classId !== undefined) {
