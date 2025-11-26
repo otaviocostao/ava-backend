@@ -41,7 +41,7 @@ export class CommunicationsService {
 
     let qb: SelectQueryBuilder<User> = this.userRepository
       .createQueryBuilder('u')
-      .leftJoin('u.roles', 'r')
+      .innerJoin('u.roles', 'r')
       .select(['u.id', 'u.name', 'u.email'])
       .where('r.name = :roleName', { roleName: role });
 
