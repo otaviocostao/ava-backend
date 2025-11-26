@@ -40,6 +40,8 @@ import { ExamsModule } from './exams/exams.module';
 import { AcademicPeriodsModule } from './academic-periods/academic-periods.module';
 import { FinancialModule } from './financial/financial.module';
 import { MuralsModule } from './murals/murals.module';
+import { TeacherSemesterAvailabilitiesModule } from './teacher-semester-availabilities/teacher-semester-availabilities.module';
+import { TeacherCoursesModule } from './teacher-courses/teacher-courses.module';
 
 @Module({
   imports: [
@@ -93,6 +95,7 @@ import { MuralsModule } from './murals/murals.module';
         };
       },
     }),
+    UsersModule, RolesModule, CoursesModule, DepartmentsModule, DisciplinesModule, ClassesModule, EnrollmentsModule, VideoLessonsModule, AttendancesModule, PaymentsModule, GradesModule, NewsModule, ActivitiesModule, MaterialsModule, LessonPlansModule, AvailabilitiesModule, SchedulesModule, ForumsModule, ForumPostsModule, MessagesModule, LiveClassModule, NoticeBoardModule, StudentsModule, AuthModule, LiveSessionsModule, ChatsModule, StudentCoursesModule, CommunicationsModule, AnalyticsModule, ExamsModule, AcademicPeriodsModule, FinancialModule, MuralsModule, TeacherSemesterAvailabilitiesModule, TeacherCoursesModule,
     UsersModule,
     RolesModule,
     CoursesModule,

@@ -3,6 +3,7 @@ import { Department } from "src/departments/entities/department.entity";
 import { Discipline } from "src/disciplines/entities/discipline.entity";
 import { StudentCourse } from "src/student-courses/entities/student-course.entity";
 import { CourseDiscipline } from "./course-discipline.entity";
+import { TeacherCourse } from "src/teacher-courses/entities/teacher-course.entity";
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, OneToMany } from "typeorm";
 
 @Entity("courses")
@@ -48,4 +49,7 @@ export class Course {
 
     @OneToMany(() => StudentCourse, (studentCourse) => studentCourse.course)
     studentCourses: StudentCourse[];
+
+    @OneToMany(() => TeacherCourse, (teacherCourse) => teacherCourse.course)
+    teacherCourses: TeacherCourse[];
 }
