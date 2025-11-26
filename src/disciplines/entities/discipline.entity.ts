@@ -7,7 +7,7 @@ export class Discipline {
     @PrimaryGeneratedColumn('uuid')
     id: string;
     
-    @Column({ length: 255, unique: true, nullable: false })
+    @Column({ length: 255, nullable: false })
     name: string;
 
     @Column({ length: 20, nullable: true })
