@@ -271,6 +271,7 @@ export class FinancialService {
         where: {
           dueDate: Between(start, end),
         },
+        relations: ['student'],
       }),
       this.expenseRepository.find({
         where: {
@@ -293,7 +294,9 @@ export class FinancialService {
     const overduePayments = allPayments.filter((p) => p.status === PaymentStatus.OVERDUE);
     const defaultRate = allPayments.length > 0 ? (overduePayments.length / allPayments.length) * 100 : 0;
 
-    const defaultingStudentIds = new Set(overduePayments.map((p) => p.student.id));
+    const defaultingStudentIds = new Set(
+      overduePayments.filter((p) => p.student).map((p) => p.student.id),
+    );
     const defaultingStudents = defaultingStudentIds.size;
     const totalStudents = allStudents.length;
 

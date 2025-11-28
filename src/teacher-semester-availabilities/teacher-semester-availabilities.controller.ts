@@ -36,7 +36,10 @@ export class TeacherSemesterAvailabilitiesController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(RolesGuard)
   @Roles('teacher')
-  @ApiOperation({ summary: 'Cria ou atualiza uma disponibilização de horários do professor para um semestre.' })
+  @ApiOperation({ 
+    summary: 'Cria ou atualiza uma disponibilização de horários do professor para um semestre.',
+    description: 'O campo academicPeriodId aceita UUID ou string de período (ex: "2026.2")',
+  })
   create(
     @Body() createDto: CreateTeacherSemesterAvailabilityDto,
     @Req() req: any,
@@ -56,10 +59,13 @@ export class TeacherSemesterAvailabilitiesController {
   @Get('teacher/:teacherId/semester/:semesterId')
   @UseGuards(RolesGuard)
   @Roles('teacher', 'coordinator')
-  @ApiOperation({ summary: 'Busca a disponibilização de um professor para um semestre específico.' })
+  @ApiOperation({ 
+    summary: 'Busca a disponibilização de um professor para um semestre específico.',
+    description: 'Aceita tanto UUID do período acadêmico quanto a string do período (ex: "2026.2")',
+  })
   findOneByTeacherAndSemester(
     @Param('teacherId', ParseUUIDPipe) teacherId: string,
-    @Param('semesterId', ParseUUIDPipe) semesterId: string,
+    @Param('semesterId') semesterId: string,
   ) {
     return this.availabilitiesService.findOneByTeacherAndSemester(teacherId, semesterId);
   }

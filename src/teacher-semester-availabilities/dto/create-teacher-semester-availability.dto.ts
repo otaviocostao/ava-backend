@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AvailabilityStatus } from 'src/common/enums/availability-status.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -10,9 +10,15 @@ export class CreateTeacherSemesterAvailabilityDto {
   @IsNotEmpty({ message: 'teacherId é obrigatório.' })
   teacherId: string;
 
-  @ApiProperty({ description: 'ID do período acadêmico (semestre)' })
-  @IsUUID('4', { message: 'academicPeriodId deve ser um UUID válido.' })
+  @ApiProperty({ 
+    description: 'ID do período acadêmico (semestre) - aceita UUID ou string de período (ex: "2026.2")',
+    example: '550e8400-e29b-41d4-a716-446655440000 ou "2026.2"'
+  })
+  @IsString({ message: 'academicPeriodId deve ser uma string.' })
   @IsNotEmpty({ message: 'academicPeriodId é obrigatório.' })
+  @Matches(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{4}\.[12])$/i, {
+    message: 'academicPeriodId deve ser um UUID válido ou uma string de período no formato YYYY.1/YYYY.2 (ex: "2026.2")',
+  })
   academicPeriodId: string;
 
   @ApiPropertyOptional({ description: 'Status da disponibilização', enum: AvailabilityStatus, default: AvailabilityStatus.DRAFT })

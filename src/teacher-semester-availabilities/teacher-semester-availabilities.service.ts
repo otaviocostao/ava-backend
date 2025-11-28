@@ -61,18 +61,6 @@ export class TeacherSemesterAvailabilitiesService {
     return teacher;
   }
 
-  private async ensureAcademicPeriodExists(academicPeriodId: string): Promise<AcademicPeriod> {
-    const academicPeriod = await this.academicPeriodRepository.findOne({
-      where: { id: academicPeriodId },
-    });
-
-    if (!academicPeriod) {
-      throw new NotFoundException(`Período acadêmico com ID "${academicPeriodId}" não encontrado.`);
-    }
-
-    return academicPeriod;
-  }
-
   private async getAcademicPeriodByIdOrPeriod(idOrPeriod: string): Promise<AcademicPeriod> {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrPeriod);
 
@@ -196,7 +184,7 @@ export class TeacherSemesterAvailabilitiesService {
 
     const [teacher, academicPeriod] = await Promise.all([
       this.ensureTeacherExists(teacherId),
-      this.ensureAcademicPeriodExists(academicPeriodId),
+      this.getAcademicPeriodByIdOrPeriod(academicPeriodId),
     ]);
 
     this.validateShifts(shifts);
@@ -216,7 +204,7 @@ export class TeacherSemesterAvailabilitiesService {
     const existingAvailability = await this.availabilityRepository.findOne({
       where: {
         teacher: { id: teacherId },
-        academicPeriod: { id: academicPeriodId },
+        academicPeriod: { id: academicPeriod.id },
       },
       relations: ['shifts'],
     });
@@ -322,26 +310,28 @@ export class TeacherSemesterAvailabilitiesService {
       throw new BadRequestException('Não é possível editar uma disponibilização já aprovada.');
     }
 
-    if (updateDto.academicPeriodId && updateDto.academicPeriodId !== availability.academicPeriod.id) {
-      const newAcademicPeriod = await this.ensureAcademicPeriodExists(updateDto.academicPeriodId);
+    if (updateDto.academicPeriodId) {
+      const newAcademicPeriod = await this.getAcademicPeriodByIdOrPeriod(updateDto.academicPeriodId);
 
-      const now = new Date();
-      if (newAcademicPeriod.startDate && newAcademicPeriod.startDate <= now) {
-        throw new BadRequestException('Apenas semestres futuros podem ser selecionados.');
+      if (newAcademicPeriod.id !== availability.academicPeriod.id) {
+        const now = new Date();
+        if (newAcademicPeriod.startDate && newAcademicPeriod.startDate <= now) {
+          throw new BadRequestException('Apenas semestres futuros podem ser selecionados.');
+        }
+
+        const existingForNewPeriod = await this.availabilityRepository.findOne({
+          where: {
+            teacher: { id: availability.teacher.id },
+            academicPeriod: { id: newAcademicPeriod.id },
+          },
+        });
+
+        if (existingForNewPeriod && existingForNewPeriod.id !== id) {
+          throw new ConflictException('Já existe uma disponibilização para este semestre.');
+        }
+
+        availability.academicPeriod = newAcademicPeriod;
       }
-
-      const existingForNewPeriod = await this.availabilityRepository.findOne({
-        where: {
-          teacher: { id: availability.teacher.id },
-          academicPeriod: { id: updateDto.academicPeriodId },
-        },
-      });
-
-      if (existingForNewPeriod && existingForNewPeriod.id !== id) {
-        throw new ConflictException('Já existe uma disponibilização para este semestre.');
-      }
-
-      availability.academicPeriod = newAcademicPeriod;
     }
 
     if (updateDto.observations !== undefined) {
