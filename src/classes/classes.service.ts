@@ -429,20 +429,24 @@ export class ClassesService {
             
             // Buscar frequências para esta aula específica (por data)
             const alunosPresentes: string[] = [];
+            let hasAnyAttendance = false;
+            
             enrollments.forEach(enrollment => {
               const attendance = enrollment.attendances?.find(att => att.date === lessonPlan.date);
-              if (attendance && attendance.present) {
-                alunosPresentes.push(enrollment.student.id);
+              if (attendance) {
+                hasAnyAttendance = true; // Há frequência registrada (presente ou ausente)
+                if (attendance.present) {
+                  alunosPresentes.push(enrollment.student.id);
+                }
               }
             });
 
             // Verificar se há frequência lançada para esta aula
-            const hasAttendance = alunosPresentes.length > 0;
+            // Considera lançada se houver pelo menos um registro de frequência para a data
+            const hasAttendance = hasAnyAttendance;
 
             let status: 'agendada' | 'lancada' | 'retificada' = 'agendada';
-            if (lessonPlan.status === 'realizada') {
-              status = hasAttendance ? 'lancada' : 'agendada';
-            } else if (hasAttendance) {
+            if (hasAttendance) {
               status = 'lancada';
             }
 
