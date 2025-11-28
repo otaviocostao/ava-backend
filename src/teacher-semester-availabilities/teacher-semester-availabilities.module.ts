@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TeacherSemesterAvailability } from './entities/teacher-semester-availability.entity';
+import { TeacherSemesterAvailabilityShift } from './entities/teacher-semester-availability-shift.entity';
 import { TeacherSemesterAvailabilitiesService } from './teacher-semester-availabilities.service';
 import { TeacherSemesterAvailabilitiesController } from './teacher-semester-availabilities.controller';
 import { User } from 'src/users/entities/user.entity';
@@ -15,6 +16,7 @@ import { Department } from 'src/departments/entities/department.entity';
   imports: [
     TypeOrmModule.forFeature([
       TeacherSemesterAvailability,
+      TeacherSemesterAvailabilityShift,
       User,
       AcademicPeriod,
       Discipline,

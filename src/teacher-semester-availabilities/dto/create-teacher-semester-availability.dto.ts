@@ -1,7 +1,8 @@
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AvailabilityStatus } from 'src/common/enums/availability-status.enum';
-import { DayOfWeek } from 'src/common/enums/day-of-week.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ShiftDto } from './shift-dto';
 
 export class CreateTeacherSemesterAvailabilityDto {
   @ApiProperty({ description: 'ID do professor' })
@@ -21,17 +22,12 @@ export class CreateTeacherSemesterAvailabilityDto {
   @IsOptional()
   status?: AvailabilityStatus;
 
-  @ApiProperty({ description: 'Disponibilidade no turno da manhã' })
-  @IsBoolean({ message: 'morning deve ser um valor booleano.' })
-  morning: boolean;
-
-  @ApiProperty({ description: 'Disponibilidade no turno da tarde' })
-  @IsBoolean({ message: 'afternoon deve ser um valor booleano.' })
-  afternoon: boolean;
-
-  @ApiProperty({ description: 'Disponibilidade no turno da noite' })
-  @IsBoolean({ message: 'evening deve ser um valor booleano.' })
-  evening: boolean;
+  @ApiProperty({ description: 'Turnos disponíveis por dia da semana', type: [ShiftDto] })
+  @IsArray({ message: 'shifts deve ser um array.' })
+  @ValidateNested({ each: true })
+  @Type(() => ShiftDto)
+  @IsNotEmpty({ message: 'Pelo menos um turno deve ser selecionado.' })
+  shifts: ShiftDto[];
 
   @ApiPropertyOptional({ description: 'Observações adicionais' })
   @IsString({ message: 'observations deve ser uma string.' })
@@ -43,12 +39,6 @@ export class CreateTeacherSemesterAvailabilityDto {
   @IsUUID('4', { each: true, message: 'Cada disciplineId deve ser um UUID válido.' })
   @IsOptional()
   disciplineIds?: string[];
-
-  @ApiPropertyOptional({ description: 'Dias da semana disponíveis', enum: DayOfWeek, isArray: true })
-  @IsArray({ message: 'weekdays deve ser um array.' })
-  @IsEnum(DayOfWeek, { each: true, message: `Cada dia da semana deve ser um dos seguintes valores: ${Object.values(DayOfWeek).join(', ')}` })
-  @IsOptional()
-  weekdays?: DayOfWeek[];
 }
 
 

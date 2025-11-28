@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TeacherSemesterAvailability } from './entities/teacher-semester-availability.entity';
+import { TeacherSemesterAvailabilityShift } from './entities/teacher-semester-availability-shift.entity';
 import { CreateTeacherSemesterAvailabilityDto } from './dto/create-teacher-semester-availability.dto';
 import { UpdateTeacherSemesterAvailabilityDto } from './dto/update-teacher-semester-availability.dto';
 import { User } from 'src/users/entities/user.entity';
@@ -24,6 +25,8 @@ export class TeacherSemesterAvailabilitiesService {
   constructor(
     @InjectRepository(TeacherSemesterAvailability)
     private readonly availabilityRepository: Repository<TeacherSemesterAvailability>,
+    @InjectRepository(TeacherSemesterAvailabilityShift)
+    private readonly shiftRepository: Repository<TeacherSemesterAvailabilityShift>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(AcademicPeriod)
@@ -70,16 +73,58 @@ export class TeacherSemesterAvailabilitiesService {
     return academicPeriod;
   }
 
-  private validateAtLeastOneShift(morning: boolean, afternoon: boolean, evening: boolean): void {
-    if (!morning && !afternoon && !evening) {
-      throw new BadRequestException('Pelo menos um turno deve estar selecionado (manhã, tarde ou noite).');
+  private async getAcademicPeriodByIdOrPeriod(idOrPeriod: string): Promise<AcademicPeriod> {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrPeriod);
+
+    let academicPeriod: AcademicPeriod | null = null;
+
+    if (isUUID) {
+      academicPeriod = await this.academicPeriodRepository.findOne({
+        where: { id: idOrPeriod },
+      });
+    } else {
+      const periodPattern = /^\d{4}\.[12]$/;
+      if (!periodPattern.test(idOrPeriod)) {
+        throw new BadRequestException(
+          `Formato de período inválido: "${idOrPeriod}". Use UUID ou formato YYYY.1/YYYY.2 (ex: "2026.2")`,
+        );
+      }
+
+      academicPeriod = await this.academicPeriodRepository.findOne({
+        where: { period: idOrPeriod },
+      });
+    }
+
+    if (!academicPeriod) {
+      throw new NotFoundException(
+        `Período acadêmico "${idOrPeriod}" não encontrado.`,
+      );
+    }
+
+    return academicPeriod;
+  }
+
+  private validateShifts(shifts: Array<{ dayOfWeek: string; shift: string }>): void {
+    if (!shifts || shifts.length === 0) {
+      throw new BadRequestException('Pelo menos um turno deve estar selecionado.');
+    }
+
+    const uniqueCombinations = new Set<string>();
+    for (const shift of shifts) {
+      const key = `${shift.dayOfWeek}-${shift.shift}`;
+      if (uniqueCombinations.has(key)) {
+        throw new BadRequestException(
+          `Combinação duplicada: ${shift.shift} na ${shift.dayOfWeek}`,
+        );
+      }
+      uniqueCombinations.add(key);
     }
   }
 
   private async getAvailabilityOrFail(id: string): Promise<TeacherSemesterAvailability> {
     const availability = await this.availabilityRepository.findOne({
       where: { id },
-      relations: ['teacher', 'academicPeriod', 'approvedBy', 'disciplines'],
+      relations: ['teacher', 'academicPeriod', 'approvedBy', 'disciplines', 'shifts'],
     });
 
     if (!availability) {
@@ -143,7 +188,7 @@ export class TeacherSemesterAvailabilitiesService {
     createDto: CreateTeacherSemesterAvailabilityDto,
     requestingUserId: string,
   ): Promise<TeacherSemesterAvailability> {
-    const { teacherId, academicPeriodId, status, morning, afternoon, evening, observations, disciplineIds, weekdays } = createDto;
+    const { teacherId, academicPeriodId, status, shifts, observations, disciplineIds } = createDto;
 
     if (teacherId !== requestingUserId) {
       throw new ForbiddenException('Você só pode criar disponibilizações para si mesmo.');
@@ -154,7 +199,7 @@ export class TeacherSemesterAvailabilitiesService {
       this.ensureAcademicPeriodExists(academicPeriodId),
     ]);
 
-    this.validateAtLeastOneShift(morning, afternoon, evening);
+    this.validateShifts(shifts);
 
     const now = new Date();
     if (academicPeriod.startDate && academicPeriod.startDate <= now) {
@@ -173,6 +218,7 @@ export class TeacherSemesterAvailabilitiesService {
         teacher: { id: teacherId },
         academicPeriod: { id: academicPeriodId },
       },
+      relations: ['shifts'],
     });
 
     if (existingAvailability) {
@@ -182,35 +228,53 @@ export class TeacherSemesterAvailabilitiesService {
         );
       }
 
+      await this.shiftRepository.delete({ availability: { id: existingAvailability.id } });
+
       existingAvailability.status = finalStatus;
-      existingAvailability.morning = morning;
-      existingAvailability.afternoon = afternoon;
-      existingAvailability.evening = evening;
       existingAvailability.observations = observations || null;
       existingAvailability.disciplines = disciplines;
-      existingAvailability.weekdays = weekdays || [];
 
       if (finalStatus === AvailabilityStatus.SUBMITTED) {
         existingAvailability.submittedAt = new Date();
       }
 
-      return this.availabilityRepository.save(existingAvailability);
+      const savedAvailability = await this.availabilityRepository.save(existingAvailability);
+
+      const shiftEntities = shifts.map((shift) =>
+        this.shiftRepository.create({
+          availability: savedAvailability,
+          dayOfWeek: shift.dayOfWeek,
+          shift: shift.shift,
+        }),
+      );
+
+      await this.shiftRepository.save(shiftEntities);
+
+      return this.getAvailabilityOrFail(savedAvailability.id);
     }
 
     const availability = this.availabilityRepository.create({
       teacher,
       academicPeriod,
       status: finalStatus,
-      morning,
-      afternoon,
-      evening,
       observations: observations || null,
       submittedAt: finalStatus === AvailabilityStatus.SUBMITTED ? new Date() : null,
       disciplines,
-      weekdays: weekdays || [],
     });
 
-    return this.availabilityRepository.save(availability);
+    const savedAvailability = await this.availabilityRepository.save(availability);
+
+    const shiftEntities = shifts.map((shift) =>
+      this.shiftRepository.create({
+        availability: savedAvailability,
+        dayOfWeek: shift.dayOfWeek,
+        shift: shift.shift,
+      }),
+    );
+
+    await this.shiftRepository.save(shiftEntities);
+
+    return this.getAvailabilityOrFail(savedAvailability.id);
   }
 
   async findAllByTeacher(teacherId: string): Promise<TeacherSemesterAvailability[]> {
@@ -218,7 +282,7 @@ export class TeacherSemesterAvailabilitiesService {
 
     return this.availabilityRepository.find({
       where: { teacher: { id: teacherId } },
-      relations: ['academicPeriod', 'approvedBy', 'disciplines'],
+      relations: ['academicPeriod', 'approvedBy', 'disciplines', 'shifts'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -228,14 +292,14 @@ export class TeacherSemesterAvailabilitiesService {
     semesterId: string,
   ): Promise<TeacherSemesterAvailability | null> {
     await this.ensureTeacherExists(teacherId);
-    await this.ensureAcademicPeriodExists(semesterId);
+    const academicPeriod = await this.getAcademicPeriodByIdOrPeriod(semesterId);
 
     return this.availabilityRepository.findOne({
       where: {
         teacher: { id: teacherId },
-        academicPeriod: { id: semesterId },
+        academicPeriod: { id: academicPeriod.id },
       },
-      relations: ['academicPeriod', 'approvedBy', 'disciplines'],
+      relations: ['academicPeriod', 'approvedBy', 'disciplines', 'shifts'],
     });
   }
 
@@ -280,22 +344,8 @@ export class TeacherSemesterAvailabilitiesService {
       availability.academicPeriod = newAcademicPeriod;
     }
 
-    const morning = updateDto.morning ?? availability.morning;
-    const afternoon = updateDto.afternoon ?? availability.afternoon;
-    const evening = updateDto.evening ?? availability.evening;
-
-    this.validateAtLeastOneShift(morning, afternoon, evening);
-
-    availability.morning = morning;
-    availability.afternoon = afternoon;
-    availability.evening = evening;
-
     if (updateDto.observations !== undefined) {
       availability.observations = updateDto.observations || null;
-    }
-
-    if (updateDto.weekdays !== undefined) {
-      availability.weekdays = updateDto.weekdays;
     }
 
     if (updateDto.status !== undefined) {
@@ -313,7 +363,25 @@ export class TeacherSemesterAvailabilitiesService {
       availability.disciplines = disciplines;
     }
 
-    return this.availabilityRepository.save(availability);
+    if (updateDto.shifts !== undefined) {
+      this.validateShifts(updateDto.shifts);
+
+      await this.shiftRepository.delete({ availability: { id: availability.id } });
+
+      const shiftEntities = updateDto.shifts.map((shift) =>
+        this.shiftRepository.create({
+          availability,
+          dayOfWeek: shift.dayOfWeek,
+          shift: shift.shift,
+        }),
+      );
+
+      await this.shiftRepository.save(shiftEntities);
+    }
+
+    const savedAvailability = await this.availabilityRepository.save(availability);
+
+    return this.getAvailabilityOrFail(savedAvailability.id);
   }
 
   async approve(
@@ -346,13 +414,15 @@ export class TeacherSemesterAvailabilitiesService {
     availability.approvedAt = new Date();
     availability.approvedBy = coordinator;
 
-    return this.availabilityRepository.save(availability);
+    const savedAvailability = await this.availabilityRepository.save(availability);
+
+    return this.getAvailabilityOrFail(savedAvailability.id);
   }
 
   async findPending(): Promise<TeacherSemesterAvailability[]> {
     return this.availabilityRepository.find({
       where: { status: AvailabilityStatus.SUBMITTED },
-      relations: ['teacher', 'academicPeriod', 'disciplines'],
+      relations: ['teacher', 'academicPeriod', 'disciplines', 'shifts'],
       order: { submittedAt: 'ASC' },
     });
   }
@@ -391,7 +461,7 @@ export class TeacherSemesterAvailabilitiesService {
       throw new ForbiddenException('Você só pode visualizar cursos do seu departamento.');
     }
 
-    await this.ensureAcademicPeriodExists(semesterId);
+    const academicPeriod = await this.getAcademicPeriodByIdOrPeriod(semesterId);
 
     const teacherCourses = await this.teacherCourseRepository.find({
       where: { course: { id: courseId } },
@@ -403,9 +473,9 @@ export class TeacherSemesterAvailabilitiesService {
     const availabilities = await this.availabilityRepository.find({
       where: {
         teacher: { id: In(teacherIds) },
-        academicPeriod: { id: semesterId },
+        academicPeriod: { id: academicPeriod.id },
       },
-      relations: ['teacher', 'academicPeriod', 'disciplines'],
+      relations: ['teacher', 'academicPeriod', 'disciplines', 'shifts'],
       order: { teacher: { name: 'ASC' } },
     });
 
@@ -416,19 +486,17 @@ export class TeacherSemesterAvailabilitiesService {
         code: course.code,
       },
       academicPeriod: {
-        id: semesterId,
-        period: (await this.academicPeriodRepository.findOne({ where: { id: semesterId } }))?.period,
+        id: academicPeriod.id,
+        period: academicPeriod.period,
       },
       teachers: availabilities.map((av) => ({
         id: av.teacher.id,
         name: av.teacher.name,
         email: av.teacher.email,
-        shifts: {
-          morning: av.morning,
-          afternoon: av.afternoon,
-          evening: av.evening,
-        },
-        weekdays: av.weekdays || [],
+        shifts: (av.shifts || []).map((shift) => ({
+          dayOfWeek: shift.dayOfWeek,
+          shift: shift.shift,
+        })),
         disciplines: av.disciplines.map((d) => ({
           id: d.id,
           name: d.name,

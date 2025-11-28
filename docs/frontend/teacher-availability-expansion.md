@@ -52,7 +52,10 @@ Este documento descreve como implementar as telas frontend para a funcionalidade
 
 **Componentes**:
 - Seleção de semestre (dropdown) - apenas futuros
-- Seleção de turnos (Manhã, Tarde, Noite) - switches
+- Seleção de turnos por dia da semana (grid/matriz):
+  - Linhas: Dias da semana (Segunda a Sexta)
+  - Colunas: Turnos (Manhã, Tarde, Noite)
+  - Checkboxes para selecionar combinações específicas (ex: Tarde na Terça, Noite na Quinta)
 - Seleção de disciplinas (multiselect) - apenas dos cursos do professor
 - Campo de observações (opcional)
 - Botões: "Salvar Rascunho" e "Enviar para Coordenação"
@@ -73,11 +76,12 @@ Este documento descreve como implementar as telas frontend para a funcionalidade
   teacherId: string;
   academicPeriodId: string;
   status?: 'draft' | 'submitted';
-  morning: boolean;
-  afternoon: boolean;
-  evening: boolean;
+  shifts: [
+    { dayOfWeek: 'terca-feira', shift: 'afternoon' },
+    { dayOfWeek: 'quinta-feira', shift: 'evening' }
+  ];
   observations?: string;
-  disciplineIds?: string[]; // NOVO
+  disciplineIds?: string[];
 }
 
 // Resposta GET /teacher-semester-availabilities/teacher/:teacherId
@@ -86,10 +90,11 @@ Este documento descreve como implementar as telas frontend para a funcionalidade
     id: string;
     academicPeriod: { id: string; period: string };
     status: 'draft' | 'submitted' | 'approved';
-    morning: boolean;
-    afternoon: boolean;
-    evening: boolean;
-    disciplines: [{ id: string; name: string; code: string }]; // NOVO
+    shifts: [
+      { id: string; dayOfWeek: 'terca-feira'; shift: 'afternoon' },
+      { id: string; dayOfWeek: 'quinta-feira'; shift: 'evening' }
+    ];
+    disciplines: [{ id: string; name: string; code: string }];
     observations: string | null;
     createdAt: string;
     submittedAt: string | null;
@@ -107,13 +112,14 @@ Este documento descreve como implementar as telas frontend para a funcionalidade
 
 2. Ao selecionar semestre:
    - Verificar se já existe disponibilização
-   - Se existir, carregar dados (turnos e disciplinas)
+   - Se existir, carregar dados (shifts e disciplinas)
    - Se não existir, iniciar formulário vazio
 
 3. Ao salvar:
-   - Validar: pelo menos um turno selecionado
+   - Validar: pelo menos um shift selecionado (combinação dia+turno)
+   - Validar: não permitir duplicação (mesmo dia + mesmo turno)
    - Validar: disciplinas selecionadas pertencem aos cursos do professor
-   - Enviar payload com `disciplineIds`
+   - Enviar payload com `shifts` (array de {dayOfWeek, shift}) e `disciplineIds`
 
 ### 3. Tela: Resumo de Disponibilizações por Curso (Coordenador)
 **Rota**: `/coordenador/cursos/:courseId/disponibilizacoes`
@@ -153,11 +159,10 @@ Este documento descreve como implementar as telas frontend para a funcionalidade
       id: string;
       name: string;
       email: string;
-      shifts: {
-        morning: boolean;
-        afternoon: boolean;
-        evening: boolean;
-      };
+      shifts: [
+        { dayOfWeek: 'terca-feira', shift: 'afternoon' },
+        { dayOfWeek: 'quinta-feira', shift: 'evening' }
+      ];
       disciplines: [
         {
           id: string;
@@ -186,7 +191,8 @@ Este documento descreve como implementar as telas frontend para a funcionalidade
 ### Validações Frontend
 
 1. **Disponibilização de Horários (Professor)**:
-   - Pelo menos um turno deve estar selecionado
+   - Pelo menos um shift deve estar selecionado (combinação dia+turno)
+   - Não permitir duplicação (mesmo dia + mesmo turno)
    - Disciplinas só podem ser selecionadas dos cursos vinculados
    - Semestre deve ser futuro
    - Ao enviar, status muda para 'submitted'
@@ -224,7 +230,7 @@ interface Props {
 
 // Formulário completo com:
 // - Seleção de semestre
-// - Switches de turnos
+// - Grid/matriz de turnos por dia (checkboxes: dia x turno)
 // - Seletor de disciplinas
 // - Campo de observações
 // - Botões de ação

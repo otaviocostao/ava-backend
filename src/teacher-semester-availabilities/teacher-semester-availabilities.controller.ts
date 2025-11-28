@@ -116,10 +116,13 @@ export class TeacherSemesterAvailabilitiesController {
   @Get('course/:courseId/semester/:semesterId/summary')
   @UseGuards(RolesGuard)
   @Roles('coordinator')
-  @ApiOperation({ summary: 'Resumo de disponibilizações por curso e semestre (apenas coordenadores).' })
+  @ApiOperation({ 
+    summary: 'Resumo de disponibilizações por curso e semestre (apenas coordenadores).',
+    description: 'Aceita tanto UUID do período acadêmico quanto a string do período (ex: "2026.2")',
+  })
   findSummaryByCourseAndSemester(
     @Param('courseId', ParseUUIDPipe) courseId: string,
-    @Param('semesterId', ParseUUIDPipe) semesterId: string,
+    @Param('semesterId') semesterId: string,
     @Req() req: any,
   ) {
     const coordinatorId = req.user.id;

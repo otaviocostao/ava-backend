@@ -1,9 +1,9 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { AcademicPeriod } from 'src/academic-periods/entities/academic-period.entity';
 import { AvailabilityStatus } from 'src/common/enums/availability-status.enum';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
-import { DayOfWeek } from 'src/common/enums/day-of-week.enum';
+import { TeacherSemesterAvailabilityShift } from './teacher-semester-availability-shift.entity';
 
 @Entity('teacher_semester_availabilities')
 @Unique(['teacher', 'academicPeriod'])
@@ -26,22 +26,11 @@ export class TeacherSemesterAvailability {
   })
   status: AvailabilityStatus;
 
-  @Column({ type: 'boolean', default: false })
-  morning: boolean;
-
-  @Column({ type: 'boolean', default: false })
-  afternoon: boolean;
-
-  @Column({ type: 'boolean', default: false })
-  evening: boolean;
-
-  @Column({
-    type: 'enum',
-    enum: DayOfWeek,
-    array: true,
-    default: [],
+  @OneToMany(() => TeacherSemesterAvailabilityShift, (shift) => shift.availability, {
+    cascade: true,
+    eager: false,
   })
-  weekdays: DayOfWeek[];
+  shifts: TeacherSemesterAvailabilityShift[];
 
   @Column({ type: 'text', nullable: true })
   observations: string | null;
