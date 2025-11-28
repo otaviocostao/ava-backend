@@ -22,12 +22,16 @@ export class DisciplinesService {
 
   // Criar nova Disciplina
   async create(createDisciplineDto: CreateDisciplineDto) {
+    // Verificar se já existe disciplina com mesmo nome E mesma carga horária
     const existingDiscipline = await this.disciplineRepository.findOne({
-      where: { name: ILike(createDisciplineDto.name) },
+      where: { 
+        name: ILike(createDisciplineDto.name),
+        workLoad: createDisciplineDto.workload,
+      },
     })
 
     if(existingDiscipline){
-      throw new ConflictException('Esta Disciplina já foi criada.')
+      throw new ConflictException('Já existe uma disciplina com este nome e carga horária.')
     }
 
     // Validar e carregar cursos obrigatórios
@@ -90,17 +94,23 @@ export class DisciplinesService {
       throw new NotFoundException(`Disciplina com o ID '${id}' não encontrada.`);
     }
 
-    if (updateDisciplineDto.name) {
+    if (updateDisciplineDto.name || updateDisciplineDto.workload !== undefined) {
+      const nameToCheck = updateDisciplineDto.name || discipline.name;
+      const workloadToCheck = updateDisciplineDto.workload !== undefined ? updateDisciplineDto.workload : discipline.workLoad;
+      
       const conflict = await this.disciplineRepository.findOne({
         where: {
-          name: ILike(updateDisciplineDto.name),
+          name: ILike(nameToCheck),
+          workLoad: workloadToCheck,
           id: Not(id),
         },
       });
       if (conflict) {
-        throw new ConflictException('Já existe uma disciplina com este nome.');
+        throw new ConflictException('Já existe uma disciplina com este nome e carga horária.');
       }
-      discipline.name = updateDisciplineDto.name;
+      if (updateDisciplineDto.name) {
+        discipline.name = updateDisciplineDto.name;
+      }
     }
 
     if (updateDisciplineDto.credits !== undefined) {

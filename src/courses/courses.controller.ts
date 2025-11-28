@@ -6,6 +6,7 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 import { ToggleDisciplineStatusDto } from './dto/toggle-discipline-status.dto';
 import { AssociateDisciplineDto } from './dto/associate-discipline.dto';
 import { UpdateDisciplineSemesterDto } from './dto/update-discipline-semester.dto';
+import { UpdateDisciplineTypeDto } from './dto/update-discipline-type.dto';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -61,6 +62,7 @@ export class CoursesController {
       courseId,
       associateDisciplineDto.disciplineId,
       associateDisciplineDto.semester,
+      associateDisciplineDto.type,
     );
   }
 
@@ -89,6 +91,20 @@ export class CoursesController {
       courseId,
       disciplineId,
       updateDisciplineSemesterDto.semester,
+    );
+  }
+
+  @Patch(':courseId/disciplines/:disciplineId/type')
+  @ApiOperation({ summary: 'Atualiza o tipo de uma disciplina no curso (obrigatória/optativa).' })
+  updateDisciplineType(
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Param('disciplineId', ParseUUIDPipe) disciplineId: string,
+    @Body() updateDisciplineTypeDto: UpdateDisciplineTypeDto,
+  ) {
+    return this.coursesService.updateDisciplineType(
+      courseId,
+      disciplineId,
+      updateDisciplineTypeDto.type,
     );
   }
 

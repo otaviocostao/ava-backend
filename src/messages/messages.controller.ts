@@ -54,10 +54,27 @@ export class MessagesController {
     lastMessage: { id: string; content: string; sentAt: Date; isRead: boolean };
     unreadCount: number;
   }>> {
+    console.log('[findInbox] Requisição recebida');
+    console.log('[findInbox] Headers:', req?.headers);
+    console.log('[findInbox] req.user:', req?.user);
+    console.log('[findInbox] req.query:', req?.query);
+    
     const loggedInUserId =
       req?.user?.id ??
       (req?.headers?.['x-user-id'] as string | undefined) ??
       (req?.query?.senderId as string | undefined);
+    
+    console.log('[findInbox] UserId extraído:', loggedInUserId);
+    console.log('[findInbox] Fontes:', {
+      fromUser: req?.user?.id,
+      fromHeader: req?.headers?.['x-user-id'],
+      fromQuery: req?.query?.senderId,
+    });
+    
+    if (!loggedInUserId) {
+      console.error('[findInbox] ERRO: userId não encontrado!');
+    }
+    
     return this.messagesService.getInboxSummaries(loggedInUserId);
   }
 

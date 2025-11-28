@@ -119,14 +119,35 @@ export class MessagesService {
     unreadCount: number;
   }>> {
     // Busca mensagens diretas (sem turma) envolvendo o usuário
-    const messages = await this.messageRepository.find({
-      where: [
-        { class: null, sender: { id: userId } as any },
-        { class: null, receiver: { id: userId } as any },
-      ] as any,
-      relations: ['sender', 'receiver'],
-      order: { sentAt: 'DESC' },
-    });
+    // Usando QueryBuilder para garantir que a query funcione corretamente
+    console.log(`[getInboxSummaries] Buscando inbox para usuário: ${userId}`);
+    
+    const queryBuilder = this.messageRepository
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.sender', 'sender')
+      .leftJoinAndSelect('message.receiver', 'receiver')
+      .where('message.class_id IS NULL')
+      .andWhere('(message.sender_id = :userId OR message.receiver_id = :userId)', { userId })
+      .orderBy('message.sent_at', 'DESC');
+    
+    const sql = queryBuilder.getSql();
+    const params = queryBuilder.getParameters();
+    console.log(`[getInboxSummaries] SQL gerado:`, sql);
+    console.log(`[getInboxSummaries] Parâmetros:`, params);
+    
+    const messages = await queryBuilder.getMany();
+    
+    console.log(`[getInboxSummaries] Mensagens encontradas: ${messages.length}`);
+    if (messages.length > 0) {
+      console.log(`[getInboxSummaries] Primeiras 3 mensagens:`, messages.slice(0, 3).map(m => ({
+        id: m.id,
+        sender_id: m.sender?.id,
+        receiver_id: m.receiver?.id,
+        class_id: (m as any).class_id,
+        content: m.content?.substring(0, 50),
+        sentAt: m.sentAt,
+      })));
+    }
 
     type Summary = {
       otherUser: Pick<User, 'id' | 'name' | 'email'>;
@@ -136,14 +157,34 @@ export class MessagesService {
 
     const map = new Map<string, Summary>();
 
+    console.log(`[getInboxSummaries] Processando ${messages.length} mensagens para criar resumos`);
+    
     for (const m of messages) {
       const isReceiver = m.receiver?.id === userId;
       const other = isReceiver ? m.sender : m.receiver;
-      if (!other) continue;
+      
+      if (!other) {
+        console.log(`[getInboxSummaries] Mensagem ${m.id} pulada - other é null`, {
+          messageId: m.id,
+          sender: m.sender ? { id: m.sender.id, name: m.sender.name } : null,
+          receiver: m.receiver ? { id: m.receiver.id, name: m.receiver.name } : null,
+          isReceiver,
+        });
+        continue;
+      }
+      
       const key = other.id;
+      console.log(`[getInboxSummaries] Processando mensagem ${m.id}`, {
+        messageId: m.id,
+        isReceiver,
+        otherUserId: other.id,
+        otherUserName: other.name,
+        key,
+      });
 
       // Primeiro encontrado é o último (ordenado DESC)
       if (!map.has(key)) {
+        console.log(`[getInboxSummaries] Criando novo resumo para usuário ${other.id} (${other.name})`);
         map.set(key, {
           otherUser: { id: other.id, name: other.name, email: other.email },
           lastMessage: { id: m.id, content: m.content, sentAt: m.sentAt, isRead: m.isRead },
@@ -155,12 +196,25 @@ export class MessagesService {
       if (isReceiver && !m.isRead) {
         const s = map.get(key)!;
         s.unreadCount += 1;
+        console.log(`[getInboxSummaries] Incrementando contador de não lidas para ${other.id}, total: ${s.unreadCount}`);
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => {
+    const summaries = Array.from(map.values()).sort((a, b) => {
       return (b.lastMessage.sentAt?.getTime?.() ?? 0) - (a.lastMessage.sentAt?.getTime?.() ?? 0);
     });
+    
+    console.log(`[getInboxSummaries] Resumos finais criados: ${summaries.length}`);
+    summaries.forEach((s, index) => {
+      console.log(`[getInboxSummaries] Resumo ${index + 1}:`, {
+        otherUser: s.otherUser,
+        lastMessageId: s.lastMessage.id,
+        lastMessageContent: s.lastMessage.content?.substring(0, 50),
+        unreadCount: s.unreadCount,
+      });
+    });
+
+    return summaries;
   }
 
   async update(messageId: string, updateMessageDto: UpdateMessageDto, requestingUserId: string): Promise<Message> {

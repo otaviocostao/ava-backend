@@ -41,5 +41,22 @@ Adiciona o valor `virtual_exam` ao enum `activities_type_enum` no PostgreSQL.
 
 **Nota:** Este script é idempotente - pode ser executado múltiplas vezes sem causar erros.
 
+### remove-discipline-name-unique-constraint.sql
+
+Remove a constraint unique do campo `name` na tabela `disciplines`, permitindo criar disciplinas com o mesmo nome desde que tenham carga horária diferente.
+
+**Como executar:**
+
+1. **Via psql (linha de comando):**
+   ```bash
+   psql -U seu_usuario -d seu_database -f database/migrations/remove-discipline-name-unique-constraint.sql
+   ```
+
+2. **Via pgAdmin ou outra ferramenta gráfica:**
+   - Abra o arquivo `remove-discipline-name-unique-constraint.sql`
+   - Execute o conteúdo no banco de dados
+
+**Nota:** Este script é idempotente - pode ser executado múltiplas vezes sem causar erros. A validação de duplicidade (nome + carga horária) agora é feita no service layer.
+
 
 

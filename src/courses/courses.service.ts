@@ -6,6 +6,7 @@ import { Course } from './entities/course.entity';
 import { Discipline } from 'src/disciplines/entities/discipline.entity';
 import { CourseDiscipline } from './entities/course-discipline.entity';
 import { CourseDisciplineStatus } from 'src/common/enums/course-discipline-status.enum';
+import { CourseDisciplineType } from 'src/common/enums/course-discipline-type.enum';
 import { Repository, In, Brackets } from 'typeorm';
 import { Department } from 'src/departments/entities/department.entity';
 import { StudentCourse } from 'src/student-courses/entities/student-course.entity';
@@ -188,7 +189,7 @@ export class CoursesService {
       order: { code: 'ASC' },
     });
   }
-  async associateDiscipline(courseId: string, disciplineId: string, semester?: number): Promise<Course> {
+  async associateDiscipline(courseId: string, disciplineId: string, semester?: number, type?: CourseDisciplineType): Promise<Course> {
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
     });
@@ -218,6 +219,7 @@ export class CoursesService {
       discipline,
       status: CourseDisciplineStatus.ACTIVE,
       semester: semester ?? undefined,
+      type: type ?? CourseDisciplineType.REQUIRED,
     });
 
     await this.courseDisciplineRepository.save(courseDiscipline);
@@ -301,6 +303,35 @@ export class CoursesService {
     }
 
     courseDiscipline.semester = semester ?? null;
+    await this.courseDisciplineRepository.save(courseDiscipline);
+
+    return this.findOne(courseId);
+  }
+
+  async updateDisciplineType(
+    courseId: string,
+    disciplineId: string,
+    type?: CourseDisciplineType,
+  ): Promise<Course> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso com o ID '${courseId}' nao encontrado.`);
+    }
+
+    const courseDiscipline = await this.courseDisciplineRepository.findOne({
+      where: { course: { id: courseId }, discipline: { id: disciplineId } },
+    });
+
+    if (!courseDiscipline) {
+      throw new NotFoundException(
+        `A disciplina com o ID '${disciplineId}' nao esta associada ao curso '${courseId}'.`,
+      );
+    }
+
+    courseDiscipline.type = type ?? CourseDisciplineType.REQUIRED;
     await this.courseDisciplineRepository.save(courseDiscipline);
 
     return this.findOne(courseId);
