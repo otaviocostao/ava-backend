@@ -875,6 +875,14 @@ export class ActivitiesService {
   /**
    * Faz download de um arquivo específico de uma submissão
    */
+  /**
+   * Faz download de um arquivo específico de uma submissão
+   * 
+   * IMPORTANTE:
+   * - Extrai o path do arquivo da URL (mesmo que a URL tenha token expirado).
+   * - Gera uma nova signed URL fresca para garantir que o download sempre funcione.
+   * - Isso resolve o problema de URLs expiradas salvas no banco.
+   */
   async downloadSubmissionFile(
     submissionId: string,
     fileUrl: string,
@@ -885,7 +893,6 @@ export class ActivitiesService {
       try {
         decodedFileUrl = decodeURIComponent(fileUrl);
       } catch {
-        // Se falhar, assume que já está decodificada
         decodedFileUrl = fileUrl;
       }
 
@@ -922,43 +929,26 @@ export class ActivitiesService {
         normalizedFileUrls.includes(normalizedDecodedFileUrl);
       
       if (!urlMatches) {
-        console.error('[ERROR downloadSubmissionFile] URL não encontrada na submissão:', {
-          submissionId,
-          fileUrl,
-          decodedFileUrl,
-          normalizedFileUrl,
-          normalizedDecodedFileUrl,
-          availableUrls: fileUrls,
-          normalizedAvailableUrls: normalizedFileUrls,
-        });
         throw new NotFoundException(
           `Arquivo nao encontrado na submissao "${submissionId}".`,
         );
       }
 
-      // Encontra a URL original (com token) que corresponde
-      let urlToUse = fileUrl;
+      // Encontra a URL original (com token) que corresponde para extrair o path
+      let urlToExtractPath = fileUrl;
       for (const storedUrl of fileUrls) {
         const normalizedStoredUrl = normalizeUrlForComparison(storedUrl);
         if (normalizedStoredUrl === normalizedFileUrl || normalizedStoredUrl === normalizedDecodedFileUrl) {
-          urlToUse = storedUrl; // Usa a URL original do banco (pode ter token válido)
+          urlToExtractPath = storedUrl;
           break;
         }
       }
       
-      // Se não encontrou, usa a decodificada
-      if (urlToUse === fileUrl && !fileUrls.includes(fileUrl)) {
-        urlToUse = decodedFileUrl;
-      }
-      
-      // Valida se a URL é válida
-      try {
-        new URL(urlToUse);
-      } catch {
-        throw new BadRequestException(`URL inválida: ${urlToUse}`);
+      if (urlToExtractPath === fileUrl && !fileUrls.includes(fileUrl)) {
+        urlToExtractPath = decodedFileUrl;
       }
 
-      // Gera uma nova URL assinada a partir do caminho (evita problemas de token expirado)
+      // Detecta o bucket da URL
       const detectBucketFromUrl = (url: string): string => {
         try {
           const pathname = new URL(url).pathname;
@@ -969,60 +959,59 @@ export class ActivitiesService {
         } catch {
           // ignora
         }
-        return 'activities';
+        return 'activities'; // default
       };
 
-      const bucket = detectBucketFromUrl(urlToUse);
-      const filePathForSign = this.storageService.extractPathFromUrl(urlToUse, bucket);
+      const bucket = detectBucketFromUrl(urlToExtractPath);
+      
+      // Extrai o path do arquivo (funciona mesmo se o token estiver expirado)
+      const filePath = this.storageService.extractPathFromUrl(urlToExtractPath, bucket);
 
-      let response: any;
-      if (filePathForSign) {
-        try {
-          const freshSignedUrl = await this.storageService.createPresignedDownloadUrl(
-            bucket,
-            filePathForSign,
-            600,
-            true,
+      if (!filePath) {
+        // Fallback: tenta usar a URL diretamente se não conseguir extrair o path
+        const response = await fetch(urlToExtractPath);
+        
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Erro desconhecido');
+          throw new InternalServerErrorException(
+            `Erro ao baixar arquivo: ${response.status} ${response.statusText} - ${errorText}`,
           );
-          response = await fetch(freshSignedUrl);
-        } catch {
-          // fallback para a URL recebida
         }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const originalFileName = this.storageService.extractOriginalFileNameFromUrl(urlToExtractPath);
+        
+        return { buffer, fileName: originalFileName };
       }
 
-      // Fallback: usa a própria URL recebida
-      if (!response) {
-        response = await fetch(urlToUse);
-      }
+      // Gera uma nova signed URL fresca (válida por 10 minutos)
+      const freshSignedUrl = await this.storageService.createPresignedDownloadUrl(
+        bucket,
+        filePath,
+        600, // 10 minutos
+        true, // força download
+      );
+
+      // Faz proxy: baixa o arquivo usando a nova signed URL e retorna o buffer
+      const response = await fetch(freshSignedUrl);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Erro desconhecido');
-        console.error('[ERROR downloadSubmissionFile] Erro ao fazer fetch:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorText,
-          url: urlToUse,
-        });
         throw new InternalServerErrorException(
-          `Erro ao baixar arquivo via URL assinada: ${response.status} ${response.statusText}`,
+          `Erro ao baixar arquivo via signed URL: ${response.status} ${response.statusText} - ${errorText}`,
         );
       }
 
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      // Nome original extraído da própria URL
-      const originalFileName = this.storageService.extractOriginalFileNameFromUrl(urlToUse);
+      // Extrai o nome original do arquivo a partir do path
+      const fileName = filePath.split('/').pop() || 'arquivo';
+      const originalFileName = this.storageService.extractOriginalFileName(fileName);
 
       return { buffer, fileName: originalFileName };
     } catch (error) {
-      console.error('[ERROR downloadSubmissionFile] Erro geral:', {
-        submissionId,
-        fileUrl,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      
       if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof InternalServerErrorException) {
         throw error;
       }

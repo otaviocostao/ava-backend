@@ -229,9 +229,10 @@ export class MaterialsService {
    * Faz download de um anexo específico de um material
    *
    * IMPORTANTE:
-   * - O campo fileUrl armazena uma URL ASSINADA do Supabase (endpoint /object/sign/... com token).
-   * - Para respeitar o RLS do Storage, usamos diretamente essa URL assinada em vez de
-   *   tentar baixar via client administrativo do Supabase.
+   * - O campo fileUrl pode armazenar uma URL ASSINADA do Supabase (endpoint /object/sign/... com token).
+   * - Para evitar problemas com expiração de tokens, extraímos o path do arquivo e geramos
+   *   uma nova signed URL ou fazemos proxy do arquivo através do backend.
+   * - Isso garante que o download sempre funcione, mesmo se a URL original tiver expirado.
    */
   async downloadMaterialAttachment(
     materialId: string,
@@ -247,32 +248,79 @@ export class MaterialsService {
     }
 
     // Verifica se o anexo existe na lista de anexos do material
+    // Compara normalizando URLs (sem query params) para lidar com tokens diferentes
     const attachmentUrls = material.fileUrl || [];
-    if (!attachmentUrls.includes(attachmentUrl)) {
+    const normalizeUrl = (url: string) => {
+      try {
+        const urlObj = new URL(url);
+        return urlObj.origin + urlObj.pathname;
+      } catch {
+        return url.split('?')[0];
+      }
+    };
+    
+    const normalizedAttachmentUrl = normalizeUrl(attachmentUrl);
+    const urlMatches = attachmentUrls.some(
+      (url) => normalizeUrl(url) === normalizedAttachmentUrl || url === attachmentUrl
+    );
+    
+    if (!urlMatches) {
       throw new NotFoundException('Anexo não encontrado neste material.');
     }
 
+    const bucket = 'materiais';
+    
     try {
-      // Faz download diretamente da URL assinada do Supabase.
-      // Essa URL já incorpora todas as regras de RLS do Storage.
-      const response = await fetch(attachmentUrl);
+      // Extrai o path do arquivo da URL (funciona tanto com signed URLs quanto com paths diretos)
+      const filePath = this.storageService.extractPathFromUrl(attachmentUrl, bucket);
+      
+      if (!filePath) {
+        // Se não conseguir extrair o path, tenta usar a URL diretamente como fallback
+        // (para compatibilidade com URLs antigas ou formatos diferentes)
+        const response = await fetch(attachmentUrl);
+        
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Erro desconhecido');
+          throw new InternalServerErrorException(
+            `Erro ao baixar anexo: ${response.status} ${response.statusText} - ${errorText}`,
+          );
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const originalFileName = this.storageService.extractOriginalFileNameFromUrl(attachmentUrl);
+        
+        return { buffer, fileName: originalFileName };
+      }
+
+      // Gera uma nova signed URL fresca (válida por 10 minutos)
+      const freshSignedUrl = await this.storageService.createPresignedDownloadUrl(
+        bucket,
+        filePath,
+        600, // 10 minutos
+        true, // força download
+      );
+
+      // Faz proxy: baixa o arquivo usando a nova signed URL e retorna o buffer
+      const response = await fetch(freshSignedUrl);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Erro desconhecido');
         throw new InternalServerErrorException(
-          `Erro ao baixar anexo via URL assinada: ${response.status} ${response.statusText} - ${errorText}`,
+          `Erro ao baixar anexo via signed URL: ${response.status} ${response.statusText} - ${errorText}`,
         );
       }
 
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      // Extrai o nome original do arquivo a partir da própria URL
-      const originalFileName = this.storageService.extractOriginalFileNameFromUrl(attachmentUrl);
+      // Extrai o nome original do arquivo a partir do path
+      const fileName = filePath.split('/').pop() || 'arquivo';
+      const originalFileName = this.storageService.extractOriginalFileName(fileName);
 
       return { buffer, fileName: originalFileName };
     } catch (error) {
-      if (error instanceof InternalServerErrorException) {
+      if (error instanceof InternalServerErrorException || error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException(

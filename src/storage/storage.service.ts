@@ -276,8 +276,7 @@ export class StorageService {
       // Último fallback: pega o último segmento do pathname (sem query params)
       const lastSegment = pathname.split('/').pop()?.split('?')[0] || 'arquivo';
       return this.extractOriginalFileName(lastSegment);
-    } catch (error) {
-      console.error('[ERROR extractOriginalFileNameFromUrl]', error, 'url:', url);
+    } catch {
       return 'arquivo';
     }
   }

@@ -65,6 +65,10 @@ export class MuralsService {
     return this.muralRepository.save(savedMural);
   }
 
+  /**
+   * Lista todos os murais, gerando novas signed URLs para as imagens
+   * Isso garante que as URLs não expirem e sempre funcionem
+   */
   async findAll(targetRole?: MuralTargetRole): Promise<Mural[]> {
     const queryBuilder = this.muralRepository.createQueryBuilder('mural');
 
@@ -72,12 +76,58 @@ export class MuralsService {
       queryBuilder.where('mural.targetRole = :targetRole', { targetRole });
     }
 
-    return queryBuilder
+    const murais = await queryBuilder
       .orderBy('mural.order', 'ASC', 'NULLS LAST')
       .addOrderBy('mural.createdAt', 'DESC')
       .getMany();
+
+    // Gera novas signed URLs para cada mural
+    const muraisComUrlsFrescas = await Promise.all(
+      murais.map(async (mural) => {
+        if (!mural.imageUrl) {
+          return mural;
+        }
+
+        try {
+          // Extrai o path da URL armazenada (mesmo que o token tenha expirado)
+          const imagePath = this.storageService.extractPathFromUrl(
+            mural.imageUrl,
+            this.bucketName,
+          );
+
+          if (!imagePath) {
+            // Se não conseguir extrair o path, mantém a URL original
+            return mural;
+          }
+
+          // Gera uma nova signed URL (válida por 1 hora)
+          const freshImageUrl = await this.storageService.createPresignedDownloadUrl(
+            this.bucketName,
+            imagePath,
+            3600, // 1 hora
+            false, // não força download (é uma imagem para exibição)
+          );
+
+          // Retorna o mural com a nova URL
+          return {
+            ...mural,
+            imageUrl: freshImageUrl,
+          };
+        } catch (error) {
+          // Em caso de erro, retorna o mural com a URL original
+          console.error(`Erro ao gerar signed URL para mural ${mural.id}:`, error);
+          return mural;
+        }
+      }),
+    );
+
+    return muraisComUrlsFrescas;
   }
 
+  /**
+   * Busca um mural por ID, gerando uma nova signed URL para a imagem
+   * Isso garante que a URL não expire e sempre funcione
+   */
   async findOne(id: string): Promise<Mural> {
     const mural = await this.muralRepository.findOne({
       where: { id },
@@ -85,6 +135,33 @@ export class MuralsService {
 
     if (!mural) {
       throw new NotFoundException(`Mural com ID "${id}" não encontrado.`);
+    }
+
+    // Gera uma nova signed URL se houver imagem
+    if (mural.imageUrl) {
+      try {
+        const imagePath = this.storageService.extractPathFromUrl(
+          mural.imageUrl,
+          this.bucketName,
+        );
+
+        if (imagePath) {
+          const freshImageUrl = await this.storageService.createPresignedDownloadUrl(
+            this.bucketName,
+            imagePath,
+            3600, // 1 hora
+            false, // não força download (é uma imagem para exibição)
+          );
+
+          return {
+            ...mural,
+            imageUrl: freshImageUrl,
+          };
+        }
+      } catch (error) {
+        console.error(`Erro ao gerar signed URL para mural ${id}:`, error);
+        // Retorna o mural com a URL original em caso de erro
+      }
     }
 
     return mural;
