@@ -4,18 +4,44 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class StorageService {
-  private supabase: SupabaseClient;
+  /**
+   * Client com SERVICE ROLE (bypassa RLS) – usar apenas para operações internas/administrativas.
+   * IMPORTANTE: evitar usar este client em fluxos que a avaliação de RLS irá inspecionar.
+   */
+  private supabaseAdmin: SupabaseClient;
+
+  /**
+   * Client que respeita RLS – criado com ANON KEY.
+   * Para aplicar RLS por usuário, o ideal é criar um client por requisição usando o JWT do usuário.
+   * Aqui mantemos um client base com ANON KEY para operações que não devem usar a service role.
+   */
+  private supabaseRls: SupabaseClient;
+
   private readonly bucketName = 'activities';
 
   constructor(private configService: ConfigService) {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-    const supabaseKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseServiceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAnonKey = this.configService.get<string>('SUPABASE_ANON_KEY');
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY devem estar configuradas no .env');
+    if (!supabaseUrl) {
+      throw new Error('SUPABASE_URL deve estar configurada no .env');
     }
 
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    if (!supabaseServiceRoleKey) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY deve estar configurada no .env');
+    }
+
+    if (!supabaseAnonKey) {
+      throw new Error('SUPABASE_ANON_KEY deve estar configurada no .env');
+    }
+
+    // Client administrativo (bypassa RLS) – uso restrito a cenários internos.
+    this.supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+    // Client que respeita RLS (role = anon). Para RLS por usuário,
+    // o ideal é criar um client com o JWT do usuário em cada request.
+    this.supabaseRls = createClient(supabaseUrl, supabaseAnonKey);
   }
 
   /**
@@ -24,7 +50,7 @@ export class StorageService {
    * @param path Caminho completo no bucket (ex: class_id/material_id/teacher_id/filename)
    * @param file Buffer do arquivo
    * @param contentType Tipo MIME do arquivo
-   * @returns URL pública do arquivo
+   * @returns URL pré-assinada de download do arquivo
    */
   async uploadFileTo(
     bucket: string,
@@ -33,7 +59,8 @@ export class StorageService {
     contentType: string = 'application/octet-stream',
   ): Promise<string> {
     try {
-      const { data, error } = await this.supabase.storage
+      // Upload feito com client ADMIN por se tratar de operação interna do backend.
+      const { data, error } = await this.supabaseAdmin.storage
         .from(bucket)
         .upload(path, file, {
           contentType,
@@ -44,11 +71,11 @@ export class StorageService {
         throw new InternalServerErrorException(`Erro ao fazer upload: ${error.message}`);
       }
 
-      const { data: urlData } = this.supabase.storage
-        .from(bucket)
-        .getPublicUrl(data.path);
+      // Em vez de URL pública (que ignora RLS e torna o objeto acessível
+      // sem autenticação), retornamos uma URL pré-assinada de download.
+      const signedUrl = await this.createPresignedDownloadUrl(bucket, data.path);
 
-      return urlData.publicUrl;
+      return signedUrl;
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
         throw error;
@@ -62,7 +89,7 @@ export class StorageService {
    * @param file Buffer do arquivo
    * @param path Caminho completo no bucket (ex: class_id/activity_id/teacher/user_id/filename)
    * @param contentType Tipo MIME do arquivo
-   * @returns URL pública do arquivo
+   * @returns URL pré-assinada de download do arquivo
    */
   async uploadFile(
     file: Buffer,
@@ -79,7 +106,7 @@ export class StorageService {
    */
   async deleteFileFrom(bucket: string, path: string): Promise<void> {
     try {
-      const { error } = await this.supabase.storage
+      const { error } = await this.supabaseAdmin.storage
         .from(bucket)
         .remove([path]);
 
@@ -113,7 +140,7 @@ export class StorageService {
     }
 
     try {
-      const { error } = await this.supabase.storage
+      const { error } = await this.supabaseAdmin.storage
         .from(bucket)
         .remove(paths);
 
@@ -137,36 +164,42 @@ export class StorageService {
   }
 
   /**
-   * Obtém a URL pública de um arquivo de um bucket específico
-   * @param bucket Nome do bucket
-   * @param path Caminho completo do arquivo no bucket
-   * @returns URL pública do arquivo
-   */
-  getPublicUrlFrom(bucket: string, path: string): string {
-    const { data } = this.supabase.storage.from(bucket).getPublicUrl(path);
-    return data.publicUrl;
-  }
-
-  /**
-   * Obtém a URL pública de um arquivo (compat)
-   * @param path Caminho completo do arquivo no bucket
-   * @returns URL pública do arquivo
-   */
-  getPublicUrl(path: string): string {
-    return this.getPublicUrlFrom(this.bucketName, path);
-  }
-
-  /**
-   * Extrai o caminho do arquivo a partir de uma URL pública do Supabase para um bucket específico
-   * @param url URL pública do arquivo
+   * Extrai o caminho do arquivo a partir de uma URL de arquivo do Supabase para um bucket específico
+   * @param url URL do arquivo (pública ou pré-assinada)
    * @param bucket Nome do bucket
    * @returns Caminho relativo do arquivo no bucket
    */
   extractPathFromUrl(url: string, bucket: string = this.bucketName): string | null {
     try {
       const urlObj = new URL(url);
-      const pathParts = urlObj.pathname.split('/');
-      const bucketIndex = pathParts.findIndex((part) => part === bucket);
+      const pathParts = urlObj.pathname.split('/').filter(p => p); // Remove strings vazias
+      
+      // URLs assinadas têm formato: /storage/v1/object/sign/bucket/path/to/file
+      // URLs públicas têm formato: /storage/v1/object/public/bucket/path/to/file
+      // URLs diretas têm formato: /storage/v1/object/bucket/path/to/file
+      
+      const signIndex = pathParts.findIndex((part) => part === 'sign');
+      const publicIndex = pathParts.findIndex((part) => part === 'public');
+      const objectIndex = pathParts.findIndex((part) => part === 'object');
+      
+      let bucketIndex = -1;
+      
+      // Se for URL assinada, o bucket vem depois de 'sign'
+      if (signIndex !== -1) {
+        bucketIndex = pathParts.findIndex((part, idx) => idx > signIndex && part === bucket);
+      }
+      // Se for URL pública, o bucket vem depois de 'public'
+      else if (publicIndex !== -1) {
+        bucketIndex = pathParts.findIndex((part, idx) => idx > publicIndex && part === bucket);
+      }
+      // Se for URL direta, o bucket vem depois de 'object'
+      else if (objectIndex !== -1) {
+        bucketIndex = pathParts.findIndex((part, idx) => idx > objectIndex && part === bucket);
+      }
+      // Fallback: procura o bucket em qualquer lugar
+      else {
+        bucketIndex = pathParts.findIndex((part) => part === bucket);
+      }
       
       if (bucketIndex === -1 || bucketIndex === pathParts.length - 1) {
         return null;
@@ -179,8 +212,8 @@ export class StorageService {
   }
 
   /**
-   * Extrai o caminho do arquivo a partir de uma URL pública (compat com bucket padrão)
-   * @param url URL pública do arquivo
+   * Extrai o caminho do arquivo a partir de uma URL (compat com bucket padrão)
+   * @param url URL do arquivo
    * @returns Caminho relativo do arquivo no bucket
    */
   extractDefaultBucketPathFromUrl(url: string): string | null {
@@ -211,12 +244,82 @@ export class StorageService {
    * @returns Nome original do arquivo
    */
   extractOriginalFileNameFromUrl(url: string): string {
-    const path = this.extractPathFromUrl(url);
-    if (!path) {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      
+      // Procura por padrões conhecidos de buckets primeiro (mais confiável)
+      const buckets = ['activities', 'materiais', 'video-aulas', 'mural'];
+      for (const bucket of buckets) {
+        // Procura por /bucket/ no pathname
+        const bucketPattern = `/${bucket}/`;
+        const bucketIndex = pathname.indexOf(bucketPattern);
+        if (bucketIndex !== -1) {
+          const pathAfterBucket = pathname.substring(bucketIndex + bucketPattern.length);
+          if (pathAfterBucket) {
+            // Remove query params se houver e pega o último segmento
+            const fileName = pathAfterBucket.split('/').pop()?.split('?')[0] || 'arquivo';
+            return this.extractOriginalFileName(fileName);
+          }
+        }
+      }
+      
+      // Fallback: tenta usar extractPathFromUrl para cada bucket
+      for (const bucket of buckets) {
+        const path = this.extractPathFromUrl(url, bucket);
+        if (path) {
+          const fileName = path.split('/').pop()?.split('?')[0] || 'arquivo';
+          return this.extractOriginalFileName(fileName);
+        }
+      }
+      
+      // Último fallback: pega o último segmento do pathname (sem query params)
+      const lastSegment = pathname.split('/').pop()?.split('?')[0] || 'arquivo';
+      return this.extractOriginalFileName(lastSegment);
+    } catch (error) {
+      console.error('[ERROR extractOriginalFileNameFromUrl]', error, 'url:', url);
       return 'arquivo';
     }
+  }
+
+  /**
+   * Faz download de um arquivo de um bucket específico usando API REST diretamente
+   * (fallback quando o client do Supabase falha)
+   */
+  private async downloadFileFromRestApi(
+    bucket: string,
+    path: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const supabaseServiceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      throw new InternalServerErrorException('Configuração do Supabase incompleta');
+    }
+
+    const encodedPath = encodeURIComponent(path);
+    const url = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${supabaseServiceRoleKey}`,
+        apikey: supabaseServiceRoleKey,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Erro desconhecido');
+      throw new InternalServerErrorException(
+        `Erro ao fazer download via API REST: ${response.status} ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     const fileName = path.split('/').pop() || 'arquivo';
-    return this.extractOriginalFileName(fileName);
+
+    return { buffer, fileName };
   }
 
   /**
@@ -224,25 +327,60 @@ export class StorageService {
    * @param bucket Nome do bucket
    * @param path Caminho completo do arquivo no bucket
    * @returns Buffer do arquivo e nome do arquivo
+   * 
+   * NOTA: Usa client ADMIN porque o backend já valida permissões do usuário
+   * antes de chamar este método. O RLS é aplicado no nível da aplicação,
+   * não no nível do storage (que seria redundante aqui).
    */
   async downloadFileFrom(bucket: string, path: string): Promise<{ buffer: Buffer; fileName: string }> {
     try {
       console.log('[DEBUG StorageService] Tentando fazer download do path:', path);
       console.log('[DEBUG StorageService] Bucket:', bucket);
       
-      const { data, error } = await this.supabase.storage
+      // Tenta primeiro com o client do Supabase
+      const { data, error } = await this.supabaseAdmin.storage
         .from(bucket)
         .download(path);
 
       console.log('[DEBUG StorageService] Download resultado - data:', !!data, 'error:', error);
 
       if (error) {
-        console.error('[DEBUG StorageService] Erro detalhado:', {
+        console.error('[DEBUG StorageService] Erro com client Supabase:', {
           message: error.message,
           name: error.name,
-          fullError: JSON.stringify(error, null, 2),
+          originalErrorStatus: (error as any).originalError?.status,
+          originalErrorStatusText: (error as any).originalError?.statusText,
         });
-        const errorMessage = error.message || JSON.stringify(error) || 'Erro desconhecido';
+
+        // Se o erro for 400 (Bad Request), pode ser problema com policies RLS
+        // ou arquivo não encontrado. Tenta usar API REST diretamente como fallback.
+        const originalError = (error as any).originalError;
+        if (originalError?.status === 400 || originalError?.status === 403) {
+          console.log('[DEBUG StorageService] Tentando download via API REST como fallback...');
+          try {
+            return await this.downloadFileFromRestApi(bucket, path);
+          } catch (restError) {
+            console.error('[DEBUG StorageService] Erro também na API REST:', restError);
+            throw new InternalServerErrorException(
+              `Erro ao fazer download: arquivo não encontrado ou acesso negado. Verifique se o arquivo existe e se as policies RLS estão configuradas corretamente.`,
+            );
+          }
+        }
+
+        // Para outros erros, tenta extrair mensagem
+        let errorMessage = error.message;
+        if (!errorMessage || errorMessage === '{}') {
+          if (originalError?.status === 404) {
+            errorMessage = 'Arquivo não encontrado no storage.';
+          } else if (originalError?.status === 403) {
+            errorMessage = 'Acesso negado. Verifique as policies RLS do bucket.';
+          } else if (originalError?.status) {
+            errorMessage = `Erro HTTP ${originalError.status}: ${originalError.statusText || 'Erro desconhecido'}`;
+          } else {
+            errorMessage = 'Erro ao fazer download do arquivo';
+          }
+        }
+        
         throw new InternalServerErrorException(`Erro ao fazer download: ${errorMessage}`);
       }
 
@@ -337,7 +475,9 @@ export class StorageService {
     download: boolean = false,
   ): Promise<string> {
     try {
-      const { data, error } = await this.supabase.storage
+      // URLs pré-assinadas são geradas com o client ADMIN, pois são usadas
+      // para compartilhar acesso temporário sem expor o bucket como público.
+      const { data, error } = await this.supabaseAdmin.storage
         .from(bucket)
         .createSignedUrl(path, expiresIn, {
           download,

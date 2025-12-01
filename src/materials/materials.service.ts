@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -227,6 +227,11 @@ export class MaterialsService {
 
   /**
    * Faz download de um anexo específico de um material
+   *
+   * IMPORTANTE:
+   * - O campo fileUrl armazena uma URL ASSINADA do Supabase (endpoint /object/sign/... com token).
+   * - Para respeitar o RLS do Storage, usamos diretamente essa URL assinada em vez de
+   *   tentar baixar via client administrativo do Supabase.
    */
   async downloadMaterialAttachment(
     materialId: string,
@@ -247,19 +252,32 @@ export class MaterialsService {
       throw new NotFoundException('Anexo não encontrado neste material.');
     }
 
-    // Extrai o path do arquivo da URL
-    const bucket = 'materiais';
-    const filePath = this.storageService.extractPathFromUrl(attachmentUrl, bucket);
-    if (!filePath) {
-      throw new BadRequestException('URL do anexo inválida.');
-    }
+    try {
+      // Faz download diretamente da URL assinada do Supabase.
+      // Essa URL já incorpora todas as regras de RLS do Storage.
+      const response = await fetch(attachmentUrl);
 
-    // Faz download do arquivo
-    const { buffer, fileName } = await this.storageService.downloadFileFrom(bucket, filePath);
-    
-    // Extrai o nome original do arquivo (remove timestamp e nanoid)
-    const originalFileName = this.storageService.extractOriginalFileName(fileName);
-    
-    return { buffer, fileName: originalFileName };
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Erro desconhecido');
+        throw new InternalServerErrorException(
+          `Erro ao baixar anexo via URL assinada: ${response.status} ${response.statusText} - ${errorText}`,
+        );
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Extrai o nome original do arquivo a partir da própria URL
+      const originalFileName = this.storageService.extractOriginalFileNameFromUrl(attachmentUrl);
+
+      return { buffer, fileName: originalFileName };
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Erro inesperado ao baixar anexo do material: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

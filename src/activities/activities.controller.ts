@@ -370,12 +370,20 @@ export class ActivitiesController {
     @Res() res: Response,
   ) {
     try {
+      // NestJS já decodifica query params automaticamente, mas vamos garantir
+      if (!fileUrl) {
+        throw new BadRequestException('fileUrl é obrigatório');
+      }
+
       const { buffer, fileName } = await this.activitiesService.downloadSubmissionFile(
         submissionId,
         fileUrl,
       );
 
-      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      // Codifica o nome do arquivo para o header Content-Disposition
+      // Usa encodeURIComponent para caracteres especiais, mas mantém formato RFC 5987
+      const encodedFileName = encodeURIComponent(fileName).replace(/'/g, "''");
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodedFileName}`);
       res.send(buffer);
     } catch (error) {
       // Se já é uma exceção HTTP, deixa o NestJS tratar

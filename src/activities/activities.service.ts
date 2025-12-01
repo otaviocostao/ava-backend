@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -879,51 +879,157 @@ export class ActivitiesService {
     submissionId: string,
     fileUrl: string,
   ): Promise<{ buffer: Buffer; fileName: string }> {
-    // Decodifica a URL caso esteja codificada
-    const decodedFileUrl = decodeURIComponent(fileUrl);
+    try {
+      // Decodifica a URL caso esteja codificada (pode falhar se já estiver decodificada)
+      let decodedFileUrl: string;
+      try {
+        decodedFileUrl = decodeURIComponent(fileUrl);
+      } catch {
+        // Se falhar, assume que já está decodificada
+        decodedFileUrl = fileUrl;
+      }
 
-    const submission = await this.activitySubmissionRepository.findOne({
-      where: { id: submissionId },
-      select: ['id', 'fileUrls'],
-    });
+      const submission = await this.activitySubmissionRepository.findOne({
+        where: { id: submissionId },
+        select: ['id', 'fileUrls'],
+      });
 
-    if (!submission) {
-      throw new NotFoundException(`Submissao com ID "${submissionId}" nao encontrada.`);
-    }
+      if (!submission) {
+        throw new NotFoundException(`Submissao com ID "${submissionId}" nao encontrada.`);
+      }
 
-    // Normaliza fileUrls para garantir que seja um array
-    const fileUrls = this.normalizeFileUrls(submission.fileUrls);
+      // Normaliza fileUrls para garantir que seja um array
+      const fileUrls = this.normalizeFileUrls(submission.fileUrls);
 
-    // Debug: log para verificar o que está sendo retornado
-    console.log('[DEBUG] submission.fileUrls raw:', submission.fileUrls);
-    console.log('[DEBUG] submission.fileUrls type:', typeof submission.fileUrls);
-    console.log('[DEBUG] fileUrls normalized:', fileUrls);
-    console.log('[DEBUG] fileUrl recebido:', fileUrl);
-    console.log('[DEBUG] decodedFileUrl:', decodedFileUrl);
+      // Função auxiliar para normalizar URLs (remove query params para comparação)
+      const normalizeUrlForComparison = (url: string): string => {
+        try {
+          const urlObj = new URL(url);
+          return urlObj.origin + urlObj.pathname;
+        } catch {
+          return url.split('?')[0];
+        }
+      };
 
-    // Verifica tanto a URL codificada quanto a decodificada
-    const urlMatches = fileUrls.includes(fileUrl) || fileUrls.includes(decodedFileUrl);
-    
-    if (!urlMatches) {
-      throw new NotFoundException(
-        `Arquivo nao encontrado na submissao "${submissionId}". URLs disponiveis: ${fileUrls.join(', ')}`,
+      // Normaliza as URLs para comparação (sem query params/tokens)
+      const normalizedFileUrl = normalizeUrlForComparison(fileUrl);
+      const normalizedDecodedFileUrl = normalizeUrlForComparison(decodedFileUrl);
+      const normalizedFileUrls = fileUrls.map(normalizeUrlForComparison);
+
+      // Verifica se a URL (sem token) está na lista
+      const urlMatches = 
+        normalizedFileUrls.includes(normalizedFileUrl) || 
+        normalizedFileUrls.includes(normalizedDecodedFileUrl);
+      
+      if (!urlMatches) {
+        console.error('[ERROR downloadSubmissionFile] URL não encontrada na submissão:', {
+          submissionId,
+          fileUrl,
+          decodedFileUrl,
+          normalizedFileUrl,
+          normalizedDecodedFileUrl,
+          availableUrls: fileUrls,
+          normalizedAvailableUrls: normalizedFileUrls,
+        });
+        throw new NotFoundException(
+          `Arquivo nao encontrado na submissao "${submissionId}".`,
+        );
+      }
+
+      // Encontra a URL original (com token) que corresponde
+      let urlToUse = fileUrl;
+      for (const storedUrl of fileUrls) {
+        const normalizedStoredUrl = normalizeUrlForComparison(storedUrl);
+        if (normalizedStoredUrl === normalizedFileUrl || normalizedStoredUrl === normalizedDecodedFileUrl) {
+          urlToUse = storedUrl; // Usa a URL original do banco (pode ter token válido)
+          break;
+        }
+      }
+      
+      // Se não encontrou, usa a decodificada
+      if (urlToUse === fileUrl && !fileUrls.includes(fileUrl)) {
+        urlToUse = decodedFileUrl;
+      }
+      
+      // Valida se a URL é válida
+      try {
+        new URL(urlToUse);
+      } catch {
+        throw new BadRequestException(`URL inválida: ${urlToUse}`);
+      }
+
+      // Gera uma nova URL assinada a partir do caminho (evita problemas de token expirado)
+      const detectBucketFromUrl = (url: string): string => {
+        try {
+          const pathname = new URL(url).pathname;
+          const buckets = ['activities', 'materiais', 'video-aulas', 'mural'];
+          for (const b of buckets) {
+            if (pathname.includes(`/${b}/`)) return b;
+          }
+        } catch {
+          // ignora
+        }
+        return 'activities';
+      };
+
+      const bucket = detectBucketFromUrl(urlToUse);
+      const filePathForSign = this.storageService.extractPathFromUrl(urlToUse, bucket);
+
+      let response: any;
+      if (filePathForSign) {
+        try {
+          const freshSignedUrl = await this.storageService.createPresignedDownloadUrl(
+            bucket,
+            filePathForSign,
+            600,
+            true,
+          );
+          response = await fetch(freshSignedUrl);
+        } catch {
+          // fallback para a URL recebida
+        }
+      }
+
+      // Fallback: usa a própria URL recebida
+      if (!response) {
+        response = await fetch(urlToUse);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Erro desconhecido');
+        console.error('[ERROR downloadSubmissionFile] Erro ao fazer fetch:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+          url: urlToUse,
+        });
+        throw new InternalServerErrorException(
+          `Erro ao baixar arquivo via URL assinada: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Nome original extraído da própria URL
+      const originalFileName = this.storageService.extractOriginalFileNameFromUrl(urlToUse);
+
+      return { buffer, fileName: originalFileName };
+    } catch (error) {
+      console.error('[ERROR downloadSubmissionFile] Erro geral:', {
+        submissionId,
+        fileUrl,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Erro inesperado ao baixar arquivo da submissao: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-
-    // Usa a URL decodificada para extrair o path
-    const urlToUse = fileUrls.includes(decodedFileUrl) ? decodedFileUrl : fileUrl;
-    
-    console.log('[DEBUG] urlToUse:', urlToUse);
-    
-    // Extrai o caminho do arquivo da URL
-    const filePath = this.storageService.extractPathFromUrl(urlToUse);
-    console.log('[DEBUG] filePath extraido:', filePath);
-    
-    if (!filePath) {
-      throw new BadRequestException(`URL do arquivo invalida: ${urlToUse}`);
-    }
-
-    return this.storageService.downloadFile(filePath);
   }
 
 
